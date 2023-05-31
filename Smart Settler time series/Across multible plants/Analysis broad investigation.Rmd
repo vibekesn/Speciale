@@ -1,0 +1,658 @@
+---
+title: "Broad_investigation_collected"
+author: "Vibeke S. Nielsen"
+date: "2022-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Save file to
+```{r}
+path_out<- "D://Speciale/Data/Broad_inspection/"
+fileName <- paste(path_out, "Analysis", sep = "")
+```
+
+
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(ggpubr)
+
+```
+
+
+
+#Loading data
+
+```{r}
+Mariagerfjord100 <- read.csv( "D://Speciale/Data/Broad_inspection/Mariagerfjord100.csv")
+Mariagerfjord75 <- read.csv( "D://Speciale/Data/Broad_inspection/Mariagerfjord75.csv")
+Mariagerfjord50 <- read.csv( "D://Speciale/Data/Broad_inspection/Mariagerfjord50.csv")
+
+Mariagerfjord <- Mariagerfjord100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Mariagerfjord75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Mariagerfjord50 %>%
+          mutate(set = factor(3))) 
+
+Hjørring100 <- read.csv( "D://Speciale/Data/Broad_inspection/Hjørring100.csv")
+Hjørring75 <- read.csv( "D://Speciale/Data/Broad_inspection/Hjørring75.csv")
+Hjørring50 <- read.csv( "D://Speciale/Data/Broad_inspection/Hjørring50.csv")
+
+Hjørring <- Hjørring100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Hjørring75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Hjørring50 %>%
+          mutate(set = factor(3))) 
+
+Hirtshals100 <- read.csv( "D://Speciale/Data/Broad_inspection/Hirtshals100.csv")
+Hirtshals75 <- read.csv( "D://Speciale/Data/Broad_inspection/Hirtshals75.csv")
+Hirtshals50 <- read.csv( "D://Speciale/Data/Broad_inspection/Hirtshals50.csv")
+
+Hirtshals <- Hirtshals100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Hirtshals75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Hirtshals50 %>%
+          mutate(set = factor(3))) 
+
+Frederecia100 <- read.csv( "D://Speciale/Data/Broad_inspection/Frederecia100.csv")
+Frederecia75 <- read.csv( "D://Speciale/Data/Broad_inspection/Frederecia75.csv")
+Frederecia50 <- read.csv( "D://Speciale/Data/Broad_inspection/Frederecia50.csv")
+
+Frederecia <- Frederecia100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Frederecia75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Frederecia50 %>%
+          mutate(set = factor(3))) 
+
+Viborg100 <- read.csv( "D://Speciale/Data/Broad_inspection/Viborg100.csv")
+Viborg75 <- read.csv( "D://Speciale/Data/Broad_inspection/Viborg75.csv")
+Viborg50 <- read.csv( "D://Speciale/Data/Broad_inspection/Viborg50.csv")
+
+Viborg <- Viborg100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Viborg75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Viborg50 %>%
+          mutate(set = factor(3))) 
+
+Viby100 <- read.csv( "D://Speciale/Data/Broad_inspection/Viby100.csv")
+Viby75 <- read.csv( "D://Speciale/Data/Broad_inspection/Viby75.csv")
+Viby50 <- read.csv( "D://Speciale/Data/Broad_inspection/Viby50.csv")
+
+Viby <- Viby100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Viby75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Viby50 %>%
+          mutate(set = factor(3))) 
+
+Egå100 <- read.csv( "D://Speciale/Data/Broad_inspection/Egå100.csv")
+Egå75 <- read.csv( "D://Speciale/Data/Broad_inspection/Egå75.csv")
+Egå50 <- read.csv( "D://Speciale/Data/Broad_inspection/Egå50.csv")
+
+Egå <- Egå100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Egå75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Egå50 %>%
+          mutate(set = factor(3))) 
+
+Silkeborg100 <- read.csv( "D://Speciale/Data/Broad_inspection/Silkeborg100.csv")
+Silkeborg75 <- read.csv( "D://Speciale/Data/Broad_inspection/Silkeborg75.csv")
+Silkeborg50 <- read.csv( "D://Speciale/Data/Broad_inspection/Silkeborg50.csv")
+
+Silkeborg <- Silkeborg100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Silkeborg75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Silkeborg50 %>%
+          mutate(set = factor(3))) 
+
+Randers100 <- read.csv( "D://Speciale/Data/Broad_inspection/Randers100.csv")
+Randers75 <- read.csv( "D://Speciale/Data/Broad_inspection/Randers75.csv")
+Randers50 <- read.csv( "D://Speciale/Data/Broad_inspection/Randers50.csv")
+
+Randers <- Randers100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Randers75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Randers50 %>%
+          mutate(set = factor(3))) 
+
+Skagen100 <- read.csv( "D://Speciale/Data/Broad_inspection/Skagen100.csv")
+Skagen75 <- read.csv( "D://Speciale/Data/Broad_inspection/Skagen75.csv")
+Skagen50 <- read.csv( "D://Speciale/Data/Broad_inspection/Skagen50.csv")
+
+Skagen <- Skagen100 %>%
+  mutate(set = factor(1)) %>%
+  rbind(Skagen75 %>%
+          mutate(set = factor(2))) %>%
+  rbind(Skagen50 %>%
+          mutate(set = factor(3))) 
+
+
+
+Parameters <- read.csv( "D://Speciale/Data/Broad_inspection/Collected_parameters_process.csv")
+Parameters <- Parameters[,2:13]
+
+```
+
+##Create plots
+```{r}
+Mariagerfjord_plot <- ggplot(data =Mariagerfjord, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Mariagerfjord")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Mariagerfjord", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Mariagerfjord", "Velocity.slope"], color=c("blue","green","red"))
+
+Mariagerfjord_plot
+
+
+
+Hjørring_plot <- ggplot(data =Hjørring, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Hjørring")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Hjørring", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Hjørring", "Velocity.slope"],color=c("blue","green","red"))
+
+Hjørring_plot
+plotName <- paste(path_out, "Hjørringplot.png")
+ggsave(plotName, width = 10, height = 5)
+
+Hirtshals_plot <- ggplot(data =Hirtshals, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Hirtshals")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Hirtshals", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Hirtshals", "Velocity.slope"],color=c("blue","green","red"))
+
+Hirtshals_plot
+
+Frederecia_plot <- ggplot(data =Frederecia, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Frederecia")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Frederecia", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Frederecia", "Velocity.slope"],color=c("blue","green","red"))
+
+Frederecia_plot 
+
+Viborg_plot <- ggplot(data =Viborg, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Viborg")#+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Viborg", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Viborg", "Velocity.slope"],color=c("blue","green","red"))
+
+
+Viborg_plot
+
+Viby_plot <- ggplot(data =Viby, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Viby")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Viby", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Viby", "Velocity.slope"],color=c("blue","green","red"))
+
+
+Viby_plot
+
+Egå_plot <- ggplot(data =Egå, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Egå")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Egå", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Egå", "Velocity.slope"],color=c("blue","green","red"))
+
+
+Egå_plot
+
+Silkeborg_plot <- ggplot(data =Silkeborg, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Silkeborg")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Silkeborg" & (Parameters[,"Dilution.percent"]) == 75, "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Silkeborg" & (Parameters[,"Dilution.percent"]) == 75, "Velocity.slope"],color="green") + geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Silkeborg" & (Parameters[,"Dilution.percent"]) == 50, "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Silkeborg" & (Parameters[,"Dilution.percent"]) == 50, "Velocity.slope"],color="blue")
+
+
+Silkeborg_plot
+
+Randers_plot <- ggplot(data =Randers, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Randers")#+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Randers", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Randers", "Velocity.slope"],color=set)
+
+Randers_plot
+
+Skagen_plot <- ggplot(data =Skagen, mapping=aes(x=Timestamp, y=Height)) + geom_point(aes(color = set))+labs(x="Time [s]", y="Sludge blanket height [mm]")+ guides(color=guide_legend("Dilution")) + ggtitle("Skagen")+ geom_abline(intercept = Parameters[(Parameters[,"Test.name"]) == "Skagen", "Velocity.intercept"], slope = Parameters[(Parameters[,"Test.name"]) == "Skagen", "Velocity.slope"],color=c("blue","green","red"))
+
+Skagen_plot
+
+```
+
+#Display velocities
+```{r}
+Velocity_plot <- ggplot(
+    data = Parameters, 
+    mapping = aes(
+      x = Dilution.percent,
+      y = Velocity,
+      color = factor(Dilution.percent)
+    )
+  )+ geom_point(aes())+ geom_smooth(method="lm",se=F, formula = Parameters$Velocity~Parameters$Dilution.percent) + facet_wrap(
+    ~ factor(Test.name),    nrow = 2
+  )+ xlim(0, 100) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge content [%]", y="Settling velocity [mm/s]") + theme(
+  axis.text.x = element_blank())+ ggtitle("Settling velocity") #+ scale_y_continuous(breaks = round(seq(min(Parameters$Velocity), max(Parameters$Velocity), by = 0.1),1))
+
+Velocity_plot
+
+  
+```
+#Shown in sludge concentration and velocity in m/h
+```{r}
+Parameters$Concentration <- 
+      Parameters$SS * Parameters$Dilution.percent / 100
+Parameters$NewVelocity <- Parameters$Velocity/1000*3600
+
+NewVelocity_plot <- ggplot(
+    data = Parameters, 
+    mapping = aes(
+      x = Concentration,
+      y = NewVelocity,
+      color = factor(Dilution.percent)
+    )
+  )+ geom_point(aes())+ geom_smooth(method="lm",se=F, formula = Parameters$NewVelocity~Parameters$Concentration) + facet_wrap(
+    ~ factor(Test.name),    nrow = 2
+  )+ xlim(0, 8) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge Concentration [g/L]", y="Hindered settling velocity [m/h]") + scale_y_continuous(breaks = round(seq(min(Parameters$NewVelocity), max(Parameters$NewVelocity), by = 1),0.5))+ ggtitle("Settling velocity")
+
+NewVelocity_plot
+plotName <- paste(path_out, "Velocityplot_units.png")
+ggsave(plotName, width = 7.5, height = 5)
+
+```
+
+#Shown in sludge concentration and velocity in m/h
+```{r}
+#interval
+V_interval <- subset(Parameters, Concentration >= 2.5 & Concentration <= 3.1)
+
+
+V_intervalplot <- ggplot(
+    data = V_interval , 
+    mapping = aes(
+      x = Concentration,
+      y = NewVelocity,
+      color = factor(Dilution.percent)
+    )
+  )+ geom_point(aes())+ geom_smooth(method="lm",se=F, formula = V_interval$NewVelocity~V_interval$Concentration) + 
+  #facet_wrap(  ~ factor(Test.name),    nrow = 2)+ 
+  xlim(2, 4) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge Concentration [g/L]", y="Hindered settling velocity [m/h]") + scale_y_continuous(breaks = round(seq(min(V_interval$NewVelocity), max(V_interval$NewVelocity), by = 1),0.5))+ ggtitle("Settling velocity")
+
+V_intervalplot
+plotName <- paste(path_out, "V_intervalplot.png")
+ggsave(plotName, width = 7.5, height = 5)
+
+```
+
+
+
+
+#Fitting Vesilind curves to velocity
+```{r}
+Vesilind_curve <- function(r_V, V_0, X_TSS) (V_0*exp(-r_V*X_TSS))
+Takacs_curve <- function(V_0, r_h, f_hs, r_f, X_TSS) (V_0*(exp(-r_h*(X_TSS-f_hs*X_TSS))-exp(-r_f*(X_TSS-f_hs*X_TSS))))
+
+```
+##Fitting Hjørring curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Hjørring", "Concentration"]
+
+Hjørring_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Hjørring",])
+
+fit_hjørring <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Hjørring_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_hjørring)
+
+cc <- coef(fit_hjørring)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Hjørring <- ggplot(data =Hjørring_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Hjørring")+scale_x_continuous(limits = c(0, 10))+scale_y_continuous(limits = c(0, 20))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Hjørring
+
+Results_Hjørring <- summary(fit_hjørring)$coefficients
+Results_Hjørring <- as.data.frame(Results_Hjørring)
+Results_Hjørring <- cbind(rownames(Results_Hjørring), data.frame(Results_Hjørring, row.names=NULL))
+names(Results_Hjørring)[1] <- "Parameter"
+Test.name <- c("Hjørring", "Hjørring")
+Results_Hjørring <- cbind(Test.name, Results_Hjørring)
+
+```
+
+
+
+##Fitting Skagen curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Skagen", "Concentration"]
+
+Skagen_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Skagen",])
+
+fit_Skagen <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Skagen_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Skagen)
+
+cc <- coef(fit_Skagen)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Skagen <- ggplot(data =Skagen_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Skagen")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Skagen
+
+Results_Skagen <- summary(fit_Skagen)$coefficients
+Results_Skagen <- as.data.frame(Results_Skagen)
+Results_Skagen <- cbind(rownames(Results_Skagen), data.frame(Results_Skagen, row.names=NULL))
+names(Results_Skagen)[1] <- "Parameter"
+Test.name <- c("Skagen", "Skagen")
+Results_Skagen <- cbind(Test.name, Results_Skagen)
+
+```
+
+
+##Fitting Mariagerfjord curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Mariagerfjord", "Concentration"]
+
+Mariagerfjord_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Mariagerfjord",])
+
+fit_Mariagerfjord <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Mariagerfjord_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Mariagerfjord)
+
+cc <- coef(fit_Mariagerfjord)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Mariagerfjord <- ggplot(data =Mariagerfjord_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Mariagerfjord")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Mariagerfjord
+
+Results_Mariagerfjord <- summary(fit_Mariagerfjord)$coefficients
+Results_Mariagerfjord <- as.data.frame(Results_Mariagerfjord)
+Results_Mariagerfjord <- cbind(rownames(Results_Mariagerfjord), data.frame(Results_Mariagerfjord, row.names=NULL))
+names(Results_Mariagerfjord)[1] <- "Parameter"
+Test.name <- c("Mariagerfjord", "Mariagerfjord")
+Results_Mariagerfjord <- cbind(Test.name, Results_Mariagerfjord)
+
+```
+
+##Fitting Egå curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Egå", "Concentration"]
+
+Egå_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Egå",])
+
+fit_Egå <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Egå_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Egå)
+
+cc <- coef(fit_Egå)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Egå <- ggplot(data =Egå_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Egå")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 25))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Egå
+
+Results_Egå <- summary(fit_Egå)$coefficients
+Results_Egå <- as.data.frame(Results_Egå)
+Results_Egå <- cbind(rownames(Results_Egå), data.frame(Results_Egå, row.names=NULL))
+names(Results_Egå)[1] <- "Parameter"
+Test.name <- c("Egå", "Egå")
+Results_Egå <- cbind(Test.name, Results_Egå)
+```
+
+##Fitting Viby curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Viby", "Concentration"]
+
+Viby_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Viby",])
+
+fit_Viby <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Viby_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Viby)
+
+cc <- coef(fit_Viby)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Viby <- ggplot(data =Viby_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Viby")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Viby
+
+Results_Viby <- summary(fit_Viby)$coefficients
+Results_Viby <- as.data.frame(Results_Viby)
+Results_Viby <- cbind(rownames(Results_Viby), data.frame(Results_Viby, row.names=NULL))
+names(Results_Viby)[1] <- "Parameter"
+Test.name <- c("Viby", "Viby")
+Results_Viby <- cbind(Test.name, Results_Viby)
+
+```
+
+##Fitting Viborg curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Viborg"&(Parameters[,"Date"]) == "31.01.2023", "SS"]
+
+Viborg_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Viborg"&(Parameters[,"Date"]) == "31.01.2023",])
+
+fit_Viborg <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Viborg_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Viborg)
+
+cc <- coef(fit_Viborg)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Viborg <- ggplot(data =Viborg_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Viborg")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Viborg
+
+Results_Viborg <- summary(fit_Viborg)$coefficients
+Results_Viborg <- as.data.frame(Results_Viborg)
+Results_Viborg <- cbind(rownames(Results_Viborg), data.frame(Results_Viborg, row.names=NULL))
+names(Results_Viborg)[1] <- "Parameter"
+Test.name <- c("Viborg", "Viborg")
+Results_Viborg <- cbind(Test.name, Results_Viborg)
+```
+##Fitting Hirtshals curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Hirtshals", "Concentration"]
+
+Hirtshals_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Hirtshals",])
+
+fit_Hirtshals <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Hirtshals_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Hirtshals)
+
+cc <- coef(fit_Hirtshals)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Hirtshals <- ggplot(data =Hirtshals_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Hirtshals")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 16))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Hirtshals
+
+Results_Hirtshals <- summary(fit_Hirtshals)$coefficients
+Results_Hirtshals <- as.data.frame(Results_Hirtshals)
+Results_Hirtshals <- cbind(rownames(Results_Hirtshals), data.frame(Results_Hirtshals, row.names=NULL))
+names(Results_Hirtshals)[1] <- "Parameter"
+Test.name <- c("Hirtshals", "Hirtshals")
+Results_Hirtshals <- cbind(Test.name, Results_Hirtshals)
+
+```
+
+##Fitting Frederecia curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Frederecia", "Concentration"]
+
+Frederecia_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Frederecia",])
+
+fit_Frederecia <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Frederecia_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Frederecia)
+
+cc <- coef(fit_Frederecia)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Frederecia <- ggplot(data =Frederecia_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Frederecia")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 25))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Frederecia
+
+Results_Frederecia <- summary(fit_Frederecia)$coefficients
+Results_Frederecia <- as.data.frame(Results_Frederecia)
+Results_Frederecia <- cbind(rownames(Results_Frederecia), data.frame(Results_Frederecia, row.names=NULL))
+names(Results_Frederecia)[1] <- "Parameter"
+Test.name <- c("Frederecia", "Frederecia")
+Results_Frederecia <- cbind(Test.name, Results_Frederecia)
+
+```
+
+
+##Fitting Randers curve
+```{r}
+X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Randers", "Concentration"]
+
+Randers_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Randers",])
+
+fit_Randers <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Randers_subset, start=list(r_V=0.5,V_0=10))
+
+summary(fit_Randers)
+
+cc <- coef(fit_Randers)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_Randers <- ggplot(data =Randers_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Randers")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_Randers
+
+Results_Randers <- summary(fit_Randers)$coefficients
+Results_Randers <- as.data.frame(Results_Randers)
+Results_Randers <- cbind(rownames(Results_Randers), data.frame(Results_Randers, row.names=NULL))
+names(Results_Randers)[1] <- "Parameter"
+Test.name <- c("Randers", "Randers")
+Results_Randers <- cbind(Test.name, Results_Randers)
+```
+
+##Fitting Silkeborg curve
+```{r}
+#X_TSS <- Parameters[(Parameters[,"Test.name"]) == "Silkeborg", "Concentration"]
+
+#Silkeborg_subset <- subset(Parameters[(Parameters[,"Test.name"]) == "Silkeborg",])
+
+#fit_Silkeborg <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=Silkeborg_subset, start=list(r_V=0.5,V_0=10))
+
+#summary(fit_Silkeborg)
+
+#cc <- coef(fit_Silkeborg)
+#r_Vfit <- cc["r_V"]
+#V_0fit <- cc["V_0"]
+#X_TSSfine <- 0.1*c(0:100)
+#df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+#Fit_curve_Silkeborg <- ggplot(data =Silkeborg_subset, mapping=aes(x=Concentration, y=NewVelocity)) + geom_point(aes())+labs(x="Concentration [g/L]", y="Velocity [m/h]")+ ggtitle("Vesilind curve fit: Silkeborg")+scale_x_continuous(limits = c(0, 12))+scale_y_continuous(limits = c(0, 12))+ geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+#Fit_curve_Silkeborg
+
+```
+##Gather fitting parameters
+```{r}
+Fitting_results <- rbind(Results_Egå, Results_Frederecia, Results_Hirtshals, Results_Hjørring, Results_Mariagerfjord, Results_Skagen, Results_Randers, Results_Viby, Results_Viborg)
+names(Fitting_results)[6] <- "P_value"
+names(Fitting_results)[5] <- "t_value"
+names(Fitting_results)[4] <- "Std.error"
+names(Fitting_results)[1] <- "Plant"
+
+V_0collected <- subset(Fitting_results[(Fitting_results[,"Parameter"]) == "V_0",])
+r_Vcollected  <- subset(Fitting_results[(Fitting_results[,"Parameter"]) == "r_V",])
+
+
+v_0estimate <- ggplot()+ 
+  geom_pointrange(data = V_0collected,  mapping = aes( x = Plant, y = Estimate)) +
+  scale_y_continuous(limits = c(0, 25), breaks = seq(0, 25, 5))+ggtitle("V_0 ")+ 
+  theme(axis.text.x = element_text(angle = 90),axis.title.x = element_blank())
+v_0Pvalue <- ggplot()+ 
+  geom_point(data = V_0collected,  mapping = aes( x = Plant, y = P_value)) +
+  scale_y_continuous(limits = c(0, 0.6), breaks = seq(0, 6, 0.1))+
+  geom_hline(yintercept=0.05, linetype="dashed", color = "blue")+ggtitle("V_0")+ 
+  theme(axis.text.x = element_text(angle = 90),axis.title.x = element_blank())
+r_Vestimate <- ggplot()+ 
+  geom_point(data = r_Vcollected,  mapping = aes( x = Plant, y = Estimate)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2))+ggtitle("r_V ")+ 
+  theme(axis.text.x = element_text(angle = 90),axis.title.x = element_blank())
+r_VPvalue <- ggplot()+ 
+  geom_point(data = r_Vcollected,  mapping = aes( x = Plant, y = P_value)) + 
+  scale_y_continuous(limits = c(0, 0.6), breaks = seq(0, 6, 0.1))+
+  geom_hline(yintercept=0.05, linetype="dashed", color = "blue")+ggtitle("r_V ")+ 
+  theme(axis.text.x = element_text(angle = 90),axis.title.x = element_blank())
+
+ggarrange(v_0estimate, r_Vestimate,v_0Pvalue, r_VPvalue, labels = c("A", "B","C", "D"), ncol = 2, nrow = 2)
+ggarrange(v_0Pvalue, r_VPvalue, ncol = 1, nrow = 2)
+
+```
+
+
+#Display SV30
+
+```{r}
+
+SV30_plot <- ggplot(
+    data = Parameters, 
+    mapping = aes(
+      x = Concentration,
+      y = SV30,
+      color = factor(Dilution.percent)
+    )
+  )+ geom_point(aes())+ facet_wrap(
+    ~ factor(Test.name),    nrow = 2
+  )+ xlim(0, 8) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge concentration [g/L]", y="Sludge volume after 30 min [mL/L]") + scale_y_continuous(breaks = c(0,100,200,300,400,500,600,700,800,900)) + ggtitle("SV30")
+
+SV30_plot
+plotName <- paste(path_out, "SV30plot.png")
+ggsave(plotName, width = 7.5, height = 5)
+  
+```
+
+
+
+
+#Display DSVI's
+```{r}
+DSVIinterval <- subset(Parameters[(Parameters[,"SV30"]) >=150,])
+DSVIinterval <- subset(DSVIinterval[(DSVIinterval[,"SV30"]) <=250,])
+
+DSVIinterval_plot <- ggplot(
+    data = DSVIinterval, 
+    mapping = aes(
+      x = Concentration,
+      y = DSVI
+    )
+  )+ geom_point(aes()) + facet_wrap(
+    ~ factor(Test.name),    nrow = 2
+  )+ xlim(0, 6) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge concentration [g/L]", y="Diluted sludge volume index [mL/g]") + scale_y_continuous(breaks = round(seq(min(0), max(350), by = 50),1))+ ggtitle("DSVI")
+
+DSVIinterval_plot
+plotName <- paste(path_out, "DSVIintervalplot.png")
+ggsave(plotName, width = 7.5, height = 5)
+
+
+DSVI_plot <- ggplot(
+    data = Parameters, 
+    mapping = aes(
+      x = Concentration,
+      y = DSVI,
+      color = factor(Dilution.percent)
+    )
+  )+ geom_point(aes()) + facet_wrap(
+    ~ factor(Test.name),    nrow = 2
+  )+ xlim(0, 8) + guides(color=guide_legend("Sludge content [%]"))  + labs( x="Sludge concentration [g/L]", y="Diluted sludge volume index [mL/L]") + scale_y_continuous(breaks = round(seq(min(150), max(250), by = 10),1))+ ggtitle("DSVI")
+
+DSVI_plot
+plotName <- paste(path_out, "DSVIplot.png")
+ggsave(plotName, width = 7.5, height = 5)
+
+```
+
+
+#Write out files
+```{r}
+parameterName <- paste(path_out, "Collected_parameters.csv", sep = "")
+write.csv(Parameters, parameterName)
+
+
+```
+
