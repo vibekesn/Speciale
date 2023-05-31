@@ -1,0 +1,210 @@
+---
+title: "Settling data processing"
+output: html_document
+date: '2022-09-27'
+author: "Vibeke S. Nielsen"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Save data to
+```{r}
+path_out<- "D://Speciale/Data/Broad_inspection/"
+fileName <- paste(path_out, "Viborg60.csv", sep = "")
+testName <- "60"
+```
+
+
+
+#Defining parameters
+```{r}
+SS <-  1.9200   #[g/L]
+Dilution.percent <-60 #[%]
+n <- 100/Dilution.percent #Dilution_factor
+
+```
+
+
+
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+
+
+```
+
+
+#Load settling data and quick visualisation in heatmap
+```{r}
+d<- openxlsx::read.xlsx( "D://Speciale/Data/DATALOGviborg31.01.xlsx", sheet = "60")
+```
+
+```{r}
+d1<- column_to_rownames(d, var = "Timestamp")
+d1_matrix <- as.matrix(d1)
+heatmap(d1_matrix, Colv=NA, Rowv=NA,scale = "column", 
+        ylab = "Time [min]", xlab= "Sensor")
+
+```
+
+#Creating graph
+Need to define the movement of the sludge mirror height. This is obtained by finding the timestamp for the biggest difference between two data points for a sensor. By that we find at which time the sludge mirror is at the sensor, when the light goes from being blocked by high turbidity to going through a clear water.
+
+```{r}
+#Finding difference between rows
+rows <- nrow(d)
+diff_rows <- d[-rows,] - d[-1,]
+diff_rows <- rbind(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), diff_rows)
+
+#The slope is an expression of the biggest difference between two sensor measurements. The slope is found by dividing with time difference
+slope <- diff_rows[]/diff_rows$Timestamp
+
+#Adding timestamp column (making the dataframe work for next step)
+slope <- subset.data.frame(slope, select=-Timestamp)
+slope_to_time <- cbind(d$Timestamp, slope)
+colnames(slope_to_time)[1]<- "Timestamp"
+
+#Visualizing in heatmap
+s.t_matrix <- as.matrix(slope_to_time)
+heatmap(s.t_matrix, Colv=NA, Rowv=NA,scale = "column")
+```
+
+
+##Finding minimum value for each sensor and coupling it to timestamp
+```{r}
+minLDR <- apply(slope, 2, function(x) which.min(x))
+Sensor_no. <- names(slope_to_time)[-1]
+ready.file <- data.frame(slope_to_time[minLDR,1], Sensor_no.)
+colnames(ready.file)[1]<- "Timestamp"
+
+
+blanketheight <- merge(slope_to_time, ready.file, all=TRUE)
+blanketheight <- blanketheight[,c("Timestamp","Sensor_no.")]
+#always increasing timestamp: copying previous value, if below
+#ready.file$Timestamp <- ave(ready.file$Timestamp, FUN = cummax)
+
+#Load cylinder dimensions
+Cyl_dim <- openxlsx::read.xlsx("D://Speciale/Data/Cylinder_dimensions.xlsx")
+colnames(Cyl_dim)[1]<- "Sensor_no."
+colnames(Cyl_dim)[2]<- "Height"
+colnames(Cyl_dim)[3]<- "Volume"
+
+#merger cylinderhøjden ind for hvert timestamp
+blanketheight <- merge(blanketheight, Cyl_dim, all.x=TRUE)
+#sorterer rækker efter stigende tid
+blanketheight <- blanketheight[order(blanketheight$Timestamp),]
+
+install.packages("zoo")              
+library("zoo") 
+#Udfylder NA med værdi i tidligere række
+blanketheight <- na.locf(blanketheight)
+```
+##Create plot
+```{r}
+#plot 
+ggplot(blanketheight, aes(Timestamp, Height)) + 
+  geom_point()+ labs(x="Time [s]", y="Sludge blanket height [mm]", )
+
+```
+#Write out blanketheight to csv file
+```{r}
+write.csv(blanketheight, fileName)
+```
+#Alternative to finding steepest slope for velocity
+```{r}
+#subset to hindered settling phase and exclude outliers
+hin_settling <- blanketheight[blanketheight$Height <300, ]
+hin_settling <- hin_settling[hin_settling$Height >50, ]
+
+
+#find difference between every 5th row (70 s)
+diff_by5 <- diff(as.matrix(hin_settling$Height), lag = 20)
+max_diff_value <- apply(diff_by5, 2, function(x) min(x))
+#get the index where the max difference is present
+max_diff_index <- apply(diff_by5, 2, function(x) which.min(x))
+#make dataframe spanning 5 steepest datapoints
+max_slope_span <- max_diff_index +20L
+max_slope <-  hin_settling[max_diff_index:max_slope_span,]
+
+#determining slope
+velocity.slope <- coef(lm(max_slope$Height~max_slope$Timestamp))[2]
+velocity<- velocity.slope*(-1)
+Velocity.intercept <- coef(lm(max_slope$Height~max_slope$Timestamp))[1]
+
+#creating plot with slope
+ggplot(blanketheight, aes(Timestamp, Height)) + 
+  geom_point()+ 
+  labs(x="Time [s]", y="Sludge blanket height [mm]")+ geom_abline(intercept = Velocity.intercept, slope = velocity.slope
+,color="blue")
+
+```
+
+
+
+#Determining Diluted Sludge Volumen Index
+$DSVI=(SV_{30}*n)/SS$ 
+```{r}
+#visualize volume to time
+ggplot(blanketheight, aes(Timestamp, Volume)) + 
+  geom_point()+ 
+  labs(x="Time [s]", y="Sludge mirror height [mL]")
+
+#Create subset for data at 1800 s
+SV30_sub <- blanketheight[blanketheight$Timestamp >500, ]
+SV30_sub <- SV30_sub[SV30_sub$Timestamp <2000, ]
+#removing scewing datapoints
+SV30_sub <- SV30_sub[SV30_sub$Height >33, ]
+#SV30_sub <- SV30_sub[SV30_sub$Height <293, ]
+
+#Finds slope and intercept for Time = 30 min
+ggplot(SV30_sub, aes(Timestamp, Volume)) + 
+  geom_point()+ 
+  labs(x="Time [s]", y="Sludge mirror height [mL]")+ 
+  geom_smooth(method="lm",se=F, formula = y~x)
+
+```
+
+##Determing SV$_{30}$
+```{r}
+SV_30_slope <- coef(lm(SV30_sub$Volume~SV30_sub$Timestamp))[2]
+SV_30_intercept <- coef(lm(SV30_sub$Volume~SV30_sub$Timestamp))[1]
+SV_30 <- SV_30_slope * 1800 + SV_30_intercept
+SV_30
+```
+
+##Determining DSVI
+```{r}
+DSVI <- SV_30 * n/ SS
+DSVI
+```
+
+#Gather parameters in table
+```{r}
+Parameters <- read.csv( "D://Speciale/Data/Broad_inspection/Viborg_parameters.csv")
+
+Parameters <-Parameters[,2:12]
+
+Parameters[nrow(Parameters)+1,] <- c(testName,Dilution.percent,n,SS,velocity,SV_30_intercept,SV_30_slope,SV_30,DSVI,Velocity.intercept,velocity.slope)
+parameterName <- paste(path_out, "Viborg_parameters.csv", sep = "")
+
+
+```
+
+
+```{r}
+write.csv(Parameters, parameterName)
+```
+
+
+
+# timeseries: https://r-graph-gallery.com/time-series.html
+
