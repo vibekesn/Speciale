@@ -1,0 +1,163 @@
+---
+title: "Settling data processing"
+output: html_document
+date: '2022-09-27'
+author: "Vibeke S. Nielsen"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+
+
+```
+
+#Defining parameters
+```{r}
+SS <- 1.42
+#[g/L]
+Dilution.percent <- 30
+n <- 100/30
+
+
+```
+
+
+
+
+#Load settling data and quick visualisation in heatmap
+```{r}
+d<- openxlsx::read.xlsx( "D://Speciale/Data/Time_series/AAØfortyndingsserie/DATALOGaaø28.03.xlsx", sheet = "30")
+
+```
+
+
+
+
+```{r}
+d1<- column_to_rownames(d, var = "Timestamp")
+d1_matrix <- as.matrix(d1)
+heatmap(d1_matrix, Colv=NA, Rowv=NA,scale = "column", 
+        ylab = "Time [min]", xlab= "Sensor")
+
+#Finding difference between rows
+rows <- nrow(d)
+diff_rows <- d[-rows,] - d[-1,]
+diff_rows <- rbind(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), diff_rows)
+
+#The slope is an expression of the biggest difference between two sensor measurements. The slope is found by dividing with time difference
+slope <- diff_rows[]/diff_rows$Timestamp
+
+#Adding timestamp column (making the dataframe work for next step)
+slope <- subset.data.frame(slope, select=-Timestamp)
+slope_to_time <- cbind(d$Timestamp, slope)
+colnames(slope_to_time)[1]<- "Timestamp"
+
+#Visualizing in heatmap
+s.t_matrix <- as.matrix(slope_to_time)
+heatmap(s.t_matrix, Colv=NA, Rowv=NA,scale = "column")
+```
+
+##Finding minimum value for each sensor and coupling it to timestamp
+```{r}
+minLDR <- apply(slope, 2, function(x) which.min(x))
+Sensor_no. <- names(slope_to_time)[-1]
+ready.file <- data.frame(slope_to_time[minLDR,1], Sensor_no.)
+colnames(ready.file)[1]<- "Timestamp"
+
+
+blanketheight <- merge(slope_to_time, ready.file, all=TRUE)
+blanketheight <- blanketheight[,c("Timestamp","Sensor_no.")]
+#always increasing timestamp: copying previous value, if below
+#ready.file$Timestamp <- ave(ready.file$Timestamp, FUN = cummax)
+
+#Load cylinder dimensions
+Cyl_dim <- openxlsx::read.xlsx("D://Speciale/Data/Cylinder_dimensions.xlsx")
+colnames(Cyl_dim)[1]<- "Sensor_no."
+colnames(Cyl_dim)[2]<- "Height"
+colnames(Cyl_dim)[3]<- "Volume"
+
+#merger cylinderhÃ¸jden ind for hvert timestamp
+blanketheight <- merge(blanketheight, Cyl_dim, all.x=TRUE)
+#sorterer rÃ¦kker efter stigende tid
+blanketheight <- blanketheight[order(blanketheight$Timestamp),]
+
+install.packages("zoo")              
+library("zoo") 
+#Udfylder NA med vÃ¦rdi i tidligere rÃ¦kke
+blanketheight <- na.locf(blanketheight)
+```
+##Create plot
+```{r}
+#plot 
+ggplot(blanketheight, aes(Timestamp, Height)) + 
+  geom_point()+ labs(x="Time [s]", y="Sludge blanket height [mm]", )
+
+```
+
+
+#Determining settling velocity
+##Find slope for hindered settling phase 
+```{r}
+#subset to hindered settling phase and exclude outliers
+hin_settling <- blanketheight[blanketheight$Height <300, ]
+hin_settling <- hin_settling[hin_settling$Height >59, ]
+#hin_settling <- hin_settling[hin_settling$Timestamp >100, ]
+
+#find difference between every 5th row (70 s)
+diff_by5 <- diff(as.matrix(hin_settling$Height), lag = 5)
+max_diff_value <- apply(diff_by5, 2, function(x) min(x))
+#get the index where the max difference is present
+max_diff_index <- apply(diff_by5, 2, function(x) which.min(x))
+#make dataframe spanning 5 steepest datapoints
+max_slope_span <- max_diff_index +5L
+max_slope <-  hin_settling[max_diff_index:max_slope_span,]
+
+#determining slope
+velocity.slope <- coef(lm(max_slope$Height~max_slope$Timestamp))[2]
+velocity<- velocity.slope*(-1)
+Velocity.intercept <- coef(lm(max_slope$Height~max_slope$Timestamp))[1]
+
+#creating plot with slope
+ggplot(blanketheight, aes(Timestamp, Height)) + 
+  geom_point()+ 
+  labs(x="Time [s]", y="Sludge blanket height [mm]")+ ylim(0,320)+ geom_abline(intercept = Velocity.intercept, slope = velocity.slope,color="blue")
+
+```
+
+
+
+
+#Gather parameters in table
+```{r}
+Date <- "28.03.2023"
+Parameters<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie_parameters.csv")
+Parameters<-Parameters[,c("Date","Dilution.percent","n","SS","Velocity","velocity.slope", "Velocity.intercept")]
+
+
+Parameters[nrow(Parameters)+1,] <-c(Date,Dilution.percent,n,SS,velocity, velocity.slope, Velocity.intercept)
+path_out<- "D://Speciale/Data/Time_series/AAØfortyndingsserie/"
+parameterName <- paste(path_out, "AAØfortyndingsserie_parameters.csv", sep = "")
+
+
+```
+
+
+
+```{r}
+write.csv(Parameters, parameterName)
+```
+
+
+
+# timeseries: https://r-graph-gallery.com/time-series.html
