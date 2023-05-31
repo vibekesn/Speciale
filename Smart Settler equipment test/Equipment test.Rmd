@@ -1,0 +1,130 @@
+---
+title: "Udstyrstest"
+author: "Vibeke S. Nielsen"
+date: "2023-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(lubridate)
+library("Metrics")
+library(ggpubr)
+
+
+```
+
+```{r}
+Parameters<- read.csv("D://Speciale/Data/Udstyrstest/Precisiontest_redo.csv")
+Parameters$VelocityUnits<- Parameters$Velocity/1000*3600
+Parameters$DilutedSS <- Parameters$SS/2.5
+Parameters$Test <- as.character(Parameters$Test)
+Parameters <- Parameters[6:23,]
+Parameters <- subset(Parameters, !Test=="5")
+
+Parameters$Equipment <- factor(Parameters$Equipment, levels = c("Smart Settler", "Manual"))
+SV30 <- ggplot(data=Parameters)+
+  geom_boxplot(mapping = aes(x=SV30, y=Equipment, fill=Equipment), show.legend = FALSE)+ labs(x="Sludge Volume at 30 min [mL/L]", y="")+
+  geom_jitter(mapping = aes(x=SV30, y=Equipment), width = 0.005, shape= 1)
+
+V <- ggplot(data=subset(Parameters, Equipment=="Smart Settler"))+
+  geom_boxplot(mapping = aes(x=VelocityUnits, y=Equipment, fill=Equipment), show.legend = FALSE)+ labs(x="Hindered Settling Velocity [m/h]", y="")+
+  scale_x_continuous(limits = c(1.5,2.75), breaks = seq(1.4,2.8, 0.2))+
+  geom_jitter(mapping = aes(x=VelocityUnits, y=Equipment), width = 0.001, shape= 1)
+
+DSVI <- ggplot(data=Parameters)+
+  geom_boxplot(mapping = aes(x=DSVI, y=Equipment, fill=Equipment), show.legend = FALSE)+ labs(x="DSVI [mL/g]", y="")+
+  scale_x_continuous(limits = c(140,190), breaks = seq(140, 190, 10))+
+  geom_jitter(mapping = aes(x=DSVI, y=Equipment), width = 0.001, shape= 1)
+
+ggarrange(DSVI, V, align="v", ncol=1, heights = c(1, 0.6))
+plotName <- paste("D://Speciale/Data/Udstyrstest/Udstyrstest_DSVIRedo.png")
+ggsave(plotName, width = 7.5, height = 3.5)
+
+SmartSettler <- subset(Parameters, Equipment=="Smart Settler")
+meanV <- mean(SmartSettler$VelocityUnits) # calculate the mean
+minV<- min(SmartSettler$DSVI) # calculate the min
+maxV<- max(SmartSettler$DSVI) # calculate the max
+sdV <- sd(SmartSettler$VelocityUnits) # calculate the standard deviation
+nV <- length(SmartSettler$VelocityUnits) # calculate the sample size
+seV <- sd(SmartSettler$VelocityUnits) / sqrt(nV) # calculate the standard error
+Error.percentV <- sdV/meanV*100
+
+meansmartDSVI<- mean(SmartSettler$DSVI) # calculate the mean
+minsmartDSVI<- min(SmartSettler$DSVI) # calculate the min
+maxsmartDSVI<- max(SmartSettler$DSVI) # calculate the max
+sdsmartDSVI<- sd(SmartSettler$DSVI) # calculate the standard deviation
+nsmartDSVI<- length(SmartSettler$DSVI) # calculate the sample size
+sesmartDSVI<- sd(SmartSettler$DSVI) / sqrt(nsmartDSVI) # calculate the standard error
+Error.percentsmartDSVI<- sdsmartDSVI/meansmartDSVI*100
+
+manualDSVI <- subset(Parameters, Equipment=="Manual")
+meanmanualDSVI<- mean(manualDSVI$DSVI) # calculate the mean
+minmanualDSVI<- min(manualDSVI$DSVI) # calculate the min
+maxmanualDSVI<- max(manualDSVI$DSVI) # calculate the max
+sdmanualDSVI<- sd(manualDSVI$DSVI) # calculate the standard deviation
+nmanualDSVI<- length(manualDSVI$DSVI) # calculate the sample size
+semanualDSVI<- sd(manualDSVI$DSVI) / sqrt(nmanualDSVI) # calculate the standard error
+Error.percentmanualDSVI<- sdmanualDSVI/meanmanualDSVI*100
+
+meansmartSV30<- mean(SmartSettler$SV30) # calculate the mean
+minsmartSV30<- min(SmartSettler$SV30) # calculate the min
+maxsmartSV30<- max(SmartSettler$SV30) # calculate the max
+sdsmartSV30<- sd(SmartSettler$SV30) # calculate the standard deviation
+nsmartSV30<- length(SmartSettler$SV30) # calculate the sample size
+sesmartSV30<- sd(SmartSettler$SV30) / sqrt(nsmartSV30) # calculate the standard error
+Error.percentsmartSV30<- sdsmartSV30/meansmartSV30*100
+
+manualSV30 <- subset(Parameters, Equipment=="Manual")
+meanmanualSV30<- mean(manualSV30$SV30) # calculate the mean
+minmanualSV30<- min(manualSV30$SV30) # calculate the min
+maxmanualSV30<- max(manualSV30$SV30) # calculate the max
+sdmanualSV30<- sd(manualSV30$SV30) # calculate the standard deviation
+nmanualSV30<- length(manualSV30$SV30) # calculate the sample size
+semanualSV30<- sd(manualSV30$SV30) / sqrt(nmanualSV30) # calculate the standard error
+Error.percentmanualSV30<- sdmanualSV30/meanmanualSV30*100
+
+stats <- c("Equipment", "Parameter","Mean", "Max", "Min", "n", "Standard deviation", "Standard error", "Error in %")
+stats_manualDSVI <- c("Manuel", "DSVI", meanmanualDSVI, minmanualDSVI, maxmanualDSVI, nmanualDSVI, sdmanualDSVI, semanualDSVI, Error.percentmanualDSVI)
+stats <- rbind.data.frame(stats,stats_manualDSVI)
+stats_smartDSVI <- c("Smart Settler", "DSVI", meansmartDSVI, minsmartDSVI, maxsmartDSVI, nsmartDSVI, sdsmartDSVI, sesmartDSVI, Error.percentsmartDSVI)
+stats <- rbind.data.frame(stats,stats_smartDSVI)
+stats_manualSV30 <- c("Manuel", "SV30", meanmanualSV30, minmanualSV30, maxmanualSV30, nmanualSV30, sdmanualSV30, semanualSV30, Error.percentmanualSV30)
+stats <- rbind.data.frame(stats,stats_manualSV30)
+stats_smartSV30 <- c("Smart Settler", "SV30", meansmartSV30, minsmartSV30, maxsmartSV30, nsmartSV30, sdsmartSV30, sesmartSV30, Error.percentsmartSV30)
+stats <- rbind.data.frame(stats,stats_smartSV30)
+stats_V <- c("Smart Settler", "Settling velocity", meanV, minV, maxV, nV, sdV, seV, Error.percentV)
+stats <- rbind.data.frame(stats,stats_V)
+names(stats)<- c("Equipment", "Parameter","Mean", "Max", "Min", "n", "Standard deviation", "Standard error", "Error in %")
+stats <- stats[-1,]
+rownames(stats) <- NULL
+stats <- cbind.data.frame(stats[,2], stats[,1], stats[,6], stats[,3], stats[,7:9])
+names(stats)<- c("Parameter","Equipment", "n","Mean",  "Standard deviation", "Standard error", "Error in %")
+stats[,4] <- as.numeric(stats[,4])
+stats[,5] <- as.numeric(stats[,5])
+stats[,6] <- as.numeric(stats[,6])
+stats[,7] <- as.numeric(stats[,7])
+stats[,4:7] <- round(stats[,4:7], digits = 2)
+stats$CI <- 1.96*stats$`Standard error` 
+
+```
+
+
+```{r}
+path_out<- "D://Speciale/Data/Udstyrstest/"
+fileName <- paste(path_out, "StatsRedo.csv", sep = "")
+write.csv(stats, fileName)
+```
+
+
+

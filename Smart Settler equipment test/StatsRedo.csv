@@ -1,0 +1,6 @@
+"","Parameter","Equipment","n","Mean","Standard deviation","Standard error","Error in %","CI"
+"1","DSVI","Manuel","8",173.86,5.38,1.9,3.09,3.724
+"2","DSVI","Smart Settler","8",172.62,15.21,5.38,8.81,10.5448
+"3","SV30","Manuel","8",296.25,9.16,3.24,3.09,6.3504
+"4","SV30","Smart Settler","8",294.15,25.92,9.17,8.81,17.9732
+"5","Settling velocity","Smart Settler","8",1.93,0.33,0.12,17.09,0.2352
