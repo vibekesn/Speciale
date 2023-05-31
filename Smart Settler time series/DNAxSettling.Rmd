@@ -1,0 +1,1055 @@
+---
+title: "Sequencing data analysis"
+author: "Vibeke S. Nielsen"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+plantall <- c("Damhusåen", "Egå", "Fredericia", "Hirtshals", "Hjørring", "Skagen", "Viby", "Aalborg Vest","Aalborg V","Aalborg West","Aalborg W", "Aalborg Øst","Aalborg Ø", "Aalborg E","Aalborg East", "Randers", "Silkeborg", "Viborg", "Mariagerfjord") 
+plantall <- sort(plantall)
+
+```
+
+```{r}
+# Load packages
+library(ampvis2)
+library(data.table)
+library(doParallel)
+library(tidyverse)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(grid)
+library(gridExtra)
+library(png)
+library(dplyr)
+library(stringr)
+library(scales)
+library(tidyr)
+library(tidyverse)
+library(knitr)
+library(reshape2)
+library(readxl)
+library("lubridate")
+library("ggpp")
+library("ggpmisc")
+install.packages("ggpubr")
+library("ggpubr")
+library("purrr")
+library(stats)
+
+```
+
+```{r}
+#load metadata
+metadata = read_excel("D://Speciale/Data/nanopore/metadata.xlsx", col_types = c( 
+     "text", "text","numeric","numeric", "date", "text",  "text", 
+     "text", "text", "text", "numeric", "text", "text"
+     ))
+
+
+
+data_paths <- list(
+
+  w32_34 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week32-34/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week32-34/Week-32-34_OK_metadata_v13.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week32-34/totalreads.csv"
+  ),
+  w36_40 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week36-40/otutable_normalised.tsv",
+   metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week36-40/Week-36-40_OK_metadata_v13.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week36-40/totalreads.csv"
+  ),
+  w42_44 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week42-44/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week42-44/Week-42-44_OK_metadata.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week42-44/totalreads.csv"
+  ),
+  w46 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/221125-MIDAS-OK-W46-V13/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/221125-MIDAS-OK-W46-V13/metadata-w46run.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/221125-MIDAS-OK-W46-V13/totalreads.csv"
+  ), 
+  w48 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week48/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week48/metadata-w48.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/week48/totalreads.csv"
+  ),
+   Jan23p1 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p1/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p1/metadata-jan2023-p1-opdateret.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p1/totalreads.csv"
+  ),
+   Jan23p2 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p2/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p2/metadata-jan2023-p2.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-jan/p2/totalreads.csv"
+  ),
+  
+Feb23p1 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p1/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p1/FEB2023_samples-metadata_P1.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p1/totalreads.csv"
+  ),
+
+Feb23p2 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p2/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p2/FEB2023_metadata_P2.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-feb/p2/totalreads.csv"
+  )  ,
+  
+Mar23p1 = c(
+    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p1/otutable_normalised.tsv",
+    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p1/MAR2023_samples_p1.xlsx",
+    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p1/totalreads.csv"
+  )#,
+
+#Mar23p2 = c(
+#    otutable = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p2/otutable_normalised.tsv",
+#    metadata = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p2/MAR2023_samples_p2.xlsx",
+#    reads = "C:/Users/Hening/Documents/GitHub/midas_onlinekontrol/nanopore_runs/2023-mar/p2/totalreads.csv"
+#  )  
+)  
+#Ensure dates are parsed correctly,
+#replace barcodes with {Barcode}_{LibID} and any non-alphanumeric chars with _
+d_list <- lapply(
+  data_paths,
+  function(paths) {
+    #load data
+    d <- amp_load(
+      otutable = paths[["otutable"]],
+      metadata = paths[["metadata"]]
+    )
+    #total reads per sample
+    reads <- fread(
+      paths[["reads"]],
+      header = FALSE,
+      col.names = c("Barcode", "Reads")
+    )
+    #merge with total reads
+    d[["metadata"]] <- merge(
+      d[["metadata"]],
+      reads,
+      by = "Barcode"
+    )
+    #fix dates
+    d[["metadata"]][["Date"]] <- lubridate::ymd(
+      d[["metadata"]][["Date"]]
+    )
+    #create new sample IDs from Barcode+LibID
+    d[["metadata"]][[1]] <- paste0(
+      d[["metadata"]][[1]],
+      "_",
+      stringi::stri_replace_all_regex(
+        d[["metadata"]][["FlowcellID"]],
+        "[^[:alnum:]]",
+        "_"
+      )
+    )
+    rownames(d[["metadata"]]) <- d[["metadata"]][[1]]
+    colnames(d[["abund"]]) <- d[["metadata"]][[1]]
+    return(d)
+  }
+)
+
+
+
+#subset to plant
+formals(amp_merge_ampvis2)$by_refseq <- FALSE
+
+```
+
+
+```{r}
+
+#merge the list of ampvis2 objects into one
+d <- Reduce(amp_merge_ampvis2, d_list)
+d_filt <- amp_subset_samples(d, ProjectName %in% c("OnlineKontrol", "DSVIRobot", "", NA))
+d_filt <- amp_subset_samples(d_filt, SampleSite %in% c(plantall))
+d_filt <-  amp_subset_samples(d_filt,!d_filt$metadata$Tank %in% c("D", "RT", "AD"))
+d_filt <-  amp_subset_samples(d_filt,!d_filt$metadata$PlantID %in% "NNF")
+
+d <- d_filt
+d_metadata <- d$metadata
+d__filtmetadata <- d_filt$metadata
+```
+
+
+```{r}
+amp_ordinate(
+  d,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_colorframe_label = "SampleSite",
+  sample_color_by = "SampleSite",
+  sample_colorframe_label_size = 3,
+  sample_colorframe = TRUE
+)+
+  theme(axis.text.x = element_text(size = 5),
+       axis.text.y = element_text(size = 5),
+        axis.title.x = element_text(size = 5),
+        axis.title.y = element_text(size = 5),
+        legend.key.size = unit(0.5, "cm"),
+        legend.title = element_text(size = 9), 
+        legend.text = element_text(size = 9))
+```
+
+
+
+
+```{r}
+#merge metadata to settling data
+Broad_inspection <- read.csv( "D://Speciale/Data/Broad_inspection/Collected_parameters.csv")
+
+
+names(Broad_inspection)[3] <- "SampleSite"
+Broad_inspection$Date <- as.Date(Broad_inspection$Date, format = "%d.%m.%Y")
+Broad_inspection[,c("X", "Dilution.percent",    "SV30.intercept", "SV30.slope", "Velocity", "Velocity.intercept", "Velocity.slope", "SVI" , "f")]<- list(NULL)
+
+AAV_timeseries <- read.csv( "D://Speciale/Data/Time_series/AAV_analysisparameters.csv")
+AAV_timeseries$SampleSite <- "Aalborg Vest"
+AAV_timeseries$Date <- as.Date(AAV_timeseries$Date, format = "%Y-%m-%d")
+AAV_timeseries[,c("X", "Dilution.percent",   "SV30.intercept", "SV30.slope", "Velocity", "Velocity.intercept", "velocity.slope", "SVI" , "f", "Manual.SVI", "Error")]<- list(NULL)
+
+AAØ_timeseries <- read.csv( "D://Speciale/Data/Time_series/AAØ_analysisparameters.csv")
+AAØ_timeseries$SampleSite <- "Aalborg Øst"
+AAØ_timeseries$Date <- as.Date(AAØ_timeseries$Date, format = "%Y-%m-%d")
+AAØ_timeseries[,c("X", "Dilution.percent",  "SV30.intercept", "SV30.slope", "Velocity", "Velocity.intercept", "velocity.slope", "SVI" , "f", "Vesilindprediction01.12", "Vesilindprediction18.01", "Manual.SVI", "Manual.DSVI")]<- list(NULL)
+
+DAM_timeseries <- read.csv( "D://Speciale/Data/Time_series/Biofos_analysis_parameters.csv")
+DAM_timeseries$SampleSite <- "Damhusåen"
+DAM_timeseries$Date <- as.Date(DAM_timeseries$Date, format = "%Y-%m-%d")
+DAM_timeseries[,c("X", "Dilution.percent", "SV30.intercept", "SV30.slope", "Velocity", "Velocity.intercept", "velocity.slope", "SVI" , "f")]<- list(NULL)
+DAM_timeseries[,c("X", "Dilution.percent",   "SV30.intercept", "SV30.slope", "Velocity", "Velocity.intercept", "velocity.slope", "SVI" , "f", "Vesilindprediction12.12", "Vesilindprediction09.01", "Manual.SVI", "Manual.DSVI")]<- list(NULL)
+
+
+AAØ_timeseries <- AAØ_timeseries[,-8]
+DAM_timeseries <- DAM_timeseries[,-8]
+Parameters <- rbind(Broad_inspection, AAV_timeseries, AAØ_timeseries, DAM_timeseries)
+
+
+Parameters$Week <- lubridate::isoweek(Parameters$Date)
+d$metadata$Week <- lubridate::isoweek(d$metadata$Date)
+
+
+```
+
+```{r}
+common_col_names <- intersect(names(d$metadata), names(Parameters))
+DSVImerged <- merge(d$metadata,Parameters, by= c("SampleSite","Week")) 
+d_merged <- amp_filter_samples(d, Barcode %in% DSVImerged$Barcode)
+#d_merged$metadata <-DSVImerged
+
+d_merged_metadata <- d_merged$metadata
+```
+
+```{r}
+d_unique <-d_merged
+d_unique$metadata <- d_unique$metadata[!duplicated(d_unique$metadata$Barcode),]
+d_unique_metadata <- d_unique$metadata
+amp_ordinate(
+  d_unique,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_colorframe_label = "SampleSite",
+  sample_color_by = "SampleSite",
+  sample_colorframe_label_size = 3,
+  sample_colorframe = TRUE,
+  sample_label_by = "Barcode",
+  repel_labels = FALSE
+)
+```
+
+
+```{r}
+#Subset to DSVI Interval
+DSVIinterval <-subset(DSVImerged[(DSVImerged[,"SV30"])<=250,])
+#DSVIinterval <-subset(DSVImerged[(DSVImerged[,"SV30"]) >=150 & (DSVImerged[,"SV30"])<=250,])
+DSVIinterval <- DSVIinterval[,-c(11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)]
+DSVIinterval <- DSVIinterval %>% 
+  group_by(Barcode,  Date.x) %>% 
+  distinct() %>% 
+  arrange(desc(SV30)) %>% 
+  slice(1)
+d_dsvi <- amp_subset_samples(d_merged, Barcode %in% DSVIinterval$Barcode )
+d_dsvi$metadata <- DSVIinterval
+d_dsvi_metadata <- d_dsvi$metadata
+
+d_dsvi$metadata$Date.x[d_dsvi$metadata$Barcode == "barcode61_FAV24427"] <- as.Date("2023-03-07", format = "%Y-%m-%d")
+
+d_dsvi$metadata$SampleSite <- factor(d_dsvi$metadata$SampleSite, levels = plantall)
+
+#Visualize in plots
+DSVIinterval_plot <- ggplot(
+    data = d_dsvi$metadata, 
+    mapping = aes(x = SV30 , y= DSVI) )+
+  geom_point(aes(color=SampleSite)) +
+# scale_x_date(date_breaks="month", date_labels = "%b %d")+ 
+  guides(color=guide_legend("Plant"))  +
+  labs( x="DSV [mL/L]", y="DSVI [mL/g]") + 
+  scale_y_continuous(breaks = round(seq(min(0), max(250), by = 20),1))+ 
+  ggtitle("Sample group: DSVI")#+  
+  #geom_text(label=d_dsvi$metadata$SampleSite, hjust=0.5, vjust=-1, size=3.5)
+DSVIinterval_plot
+
+
+#Subset to velocity
+Concmedian <- median(DSVImerged$Concentration)
+Concmean <- mean(DSVImerged$Concentration)
+Conchigh <- Concmedian+0.25
+Conclow <- Concmedian-0.25
+Cinterval <-subset(DSVImerged[(DSVImerged[,"Concentration"]) >=Conclow & (DSVImerged[,"Concentration"])<=Conchigh,])
+Cinterval <-Cinterval[,-c(11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)]
+
+Cinterval <- Cinterval %>% 
+  group_by(Barcode,  Date.x) %>% 
+  distinct() %>% 
+  arrange(desc(SV30)) %>% 
+  slice(1)
+d_V <- amp_subset_samples(d_merged, Barcode %in% Cinterval$Barcode )
+d_V$metadata <-Cinterval
+d_V_metadata <- d_V$metadata
+
+d_V$metadata$SampleSite <- factor(d_V$metadata$SampleSite, levels = plantall)
+
+#Visualize in plots
+Velocity_plot <- ggplot(
+    data = d_V$metadata, 
+    mapping = aes(
+      x = Concentration,
+      y = NewVelocity))+
+  geom_point(aes(color=SampleSite))+ 
+  labs( x="Diluted SS [g/L]", y="v_hs [m/h]") + 
+  scale_y_continuous(breaks = round(seq(min(0), max(8), by = 1),1))+ 
+  #scale_x_continuous(breaks = round(seq(min(1), max(2), by = 0.5),1))+ 
+  ggtitle("Sample group: v_hs")
+Velocity_plot
+DSVIinterval_plot
+ggarrange(DSVIinterval_plot,Velocity_plot, nrow=1, common.legend = TRUE, legend = "bottom" )
+plotName <- paste("D://Speciale/Data/Time_series/DSVIandVsamples.png")
+ggsave(plotName, width = 10, height = 5)
+```
+
+
+
+
+
+```{r}
+d_merged <- amp_subset_samples(d_merged, !SampleSite %in% "Silkeborg")
+
+heatmap <- amp_heatmap(
+  d_merged, 
+  group_by = "SampleSite",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  #rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  #plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE,
+  showRemainingTaxa = TRUE,
+  plot_values = FALSE
+)#+theme(legend.position = "bottom")
+heatmap
+plotName <- paste("D://Speciale/Data/Time_series/heatmap_merged.png")
+ggsave(plotName, width = 10, height = 12)
+```
+
+
+```{r}
+#Aggreate genera and investigate correlation
+genus_dsvi <- aggregate_abund(
+   d_dsvi$abund,
+  d_dsvi$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+genus_dsvi <- genus_dsvi[,-"Abundance"]
+genus_dsvi <- distinct(genus_dsvi)
+#Add tax and make column with Phylum and genera combined
+d_merged_tax <- d_merged$tax
+tax_genusup <- d_merged_tax[,2:6]
+tax_genusup <- distinct(tax_genusup)
+tax_genusup <- unite(data=tax_genusup,"Phylum.Genus", c(Phylum,Genus), sep="; ", na.rm = TRUE, remove = FALSE)
+names(genus_dsvi)[1] <- "Phylum.Genus"
+genus_dsvi <- merge(genus_dsvi, tax_genusup , by="Phylum.Genus" )
+#merge to DSVI 
+names(genus_dsvi)[2] <- "Barcode"
+common_col_names <- intersect(names(genus_dsvi), names(d_V$metadata))
+genus_dsvi <- merge(genus_dsvi, d_V$metadata, by=common_col_names, allow.cartesian = T)
+genus_dsvi  <- as.data.frame(genus_dsvi )
+#Filter any Genera with no observations in abundance above 0.1
+Above0.1 <- filter(genus_dsvi, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Genus), ]
+genus_dsvi <- genus_dsvi[genus_dsvi$Genus %in%Above0.1names$Genus, ]
+genus_list_dsvi <- split(genus_dsvi, genus_dsvi$Phylum.Genus)
+
+```
+
+
+
+
+
+
+```{r}
+##Spearman Correlation to DSVI
+Spear_dsvi_result_list <- lapply(genus_list_dsvi, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_dsvi<- do.call(rbind, Spear_dsvi_result_list)
+  Spear_dsvi<- as.data.frame(Spear_dsvi)
+  Spear_dsvi<- cbind(rownames(Spear_dsvi), data.frame(Spear_dsvi, row.names=NULL))
+  names(Spear_dsvi)[1] <- "Genus"
+  Spear_dsvi<- Spear_dsvi[, c("Genus", "p.value", "estimate")]
+  Spear_dsvi$p.value <- as.numeric(Spear_dsvi$p.value)
+   Spear_dsvi$estimate <- as.numeric(Spear_dsvi$estimate)
+  Spear_dsvi$p.value <- round(Spear_dsvi$p.value, digits = 3)
+  Spear_dsvi<- subset(Spear_dsvi, Spear_dsvi$p.value < 0.05)
+names(Spear_dsvi)[3] <- "CorCoef"
+   Spear_dsvi$Test <- "Spearman"
+
+
+filtSpear_dsvi <- subset( Spear_dsvi,  Spear_dsvi$CorCoef > 0.5 |  Spear_dsvi$CorCoef < -0.5)
+ggplot(filtSpear_dsvi, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+Spear_dsvi$Parameter <- "DSVI"
+Spear_dsvi$Plant <- "Across"
+Spear_dsvi$Data <- "Smart Settler"
+
+```
+
+
+
+
+
+
+```{r}
+#Aggreate genera and investigate correlation
+genus_Velocity <- aggregate_abund(
+   d_V$abund,
+  d_V$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+genus_Velocity <- genus_Velocity[,-"Abundance"]
+genus_Velocity <- distinct(genus_Velocity)
+#Add tax and make column with Phylum and genera combined
+d_merged_tax <- d_merged$tax
+tax_genusup <- d_merged_tax[,2:6]
+tax_genusup <- distinct(tax_genusup)
+tax_genusup <- unite(data=tax_genusup,"Phylum.Genus", c(Phylum,Genus), sep="; ", na.rm = TRUE, remove = FALSE)
+names(genus_Velocity)[1] <- "Phylum.Genus"
+genus_Velocity <- merge(genus_Velocity, tax_genusup , by="Phylum.Genus" )
+#merge to DSVI 
+names(genus_Velocity)[2] <- "Barcode"
+common_col_names <- intersect(names(genus_Velocity), names(d_V$metadata))
+genus_Velocity <- merge(genus_Velocity, d_V$metadata, by=common_col_names, allow.cartesian = T)
+genus_Velocity  <- as.data.frame(genus_Velocity )
+#Filter any Genera with no observations in abundance above 0.1
+Above0.1 <- filter(genus_Velocity, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Genus), ]
+genus_Velocity <- genus_Velocity[genus_Velocity$Genus %in%Above0.1names$Genus, ]
+genus_list_Velocity <- split(genus_Velocity, genus_Velocity$Phylum.Genus)
+```
+
+
+```{r}
+##Spearman Correlation to DSVI
+Spear_Velocity_result_list <- lapply(genus_list_Velocity, function(df) {
+  cor.test(df[, "Sum"], df[, "NewVelocity"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_Velocity<- do.call(rbind, Spear_Velocity_result_list)
+  Spear_Velocity<- as.data.frame(Spear_Velocity)
+  Spear_Velocity<- cbind(rownames(Spear_Velocity), data.frame(Spear_Velocity, row.names=NULL))
+  names(Spear_Velocity)[1] <- "Genus"
+  Spear_Velocity<- Spear_Velocity[, c("Genus", "p.value", "estimate")]
+  Spear_Velocity$p.value <- as.numeric(Spear_Velocity$p.value)
+   Spear_Velocity$estimate <- as.numeric(Spear_Velocity$estimate)
+  Spear_Velocity$p.value <- round(Spear_Velocity$p.value, digits = 3)
+  Spear_Velocity<- subset(Spear_Velocity, Spear_Velocity$p.value <= 0.05)
+names(Spear_Velocity)[3] <- "CorCoef"
+Spear_Velocity$Test <- "Spearman"
+
+
+filtSpear_Velocity <- subset( Spear_Velocity,  Spear_Velocity$CorCoef > 0.5 |  Spear_Velocity$CorCoef < -0.5)
+ggplot(filtSpear_Velocity, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+Spear_Velocity$Parameter <- "v_hs"
+Spear_Velocity$Plant <- "Across"
+Spear_Velocity$Data <- "Smart Settler"
+
+#CorV <- rbind(Pear_Velocity,Spear_Velocity)
+
+```
+
+
+```{r}
+genus_Velocity <- arrange(genus_Velocity, desc(Sum))
+genusfactor <- unique(genus_Velocity$Phylum.Genus)
+
+Biobank_cor <- read.csv( "D://Speciale/Data/Extra data/Biobank_Total_cor.csv")
+Biobank_cor <- subset(Biobank_cor, !Plant %in% c("Mariagerfjord", "Total"))
+Biobank_cor <- Biobank_cor[,-1]
+names(Biobank_cor)[4] <- "Test"
+Biobank_cor$Parameter <- "DSVI"
+Biobank_cor$Data <- "Biobank"
+Biobank_cor$Plant <- paste("Biobank:",Biobank_cor$Plant, sep = " ")
+
+
+
+filt_Biobank_Cor <- subset(Biobank_cor, Genus %in% c(Spear_dsvi$Genus, Spear_Velocity$Genus))
+
+Cor <- rbind( Spear_dsvi ,Spear_Velocity)
+Cor$Plant <- paste("Smart Settler:",Cor$Plant, sep = " ")
+
+
+Cor <- rbind(filt_Biobank_Cor , Cor)
+Cor <- Cor[order(Cor$Genus),]
+
+
+filtCor <- subset(Cor,  Cor$CorCoef > 0.5 | Cor$CorCoef < -0.5)
+filtfiltCor <- subset(Cor, Genus %in% filtCor$Genus)
+filtfiltCor$Genus <- factor(filtfiltCor$Genus, levels = genusfactor)
+
+
+
+cor_plot <- ggplot(filtfiltCor) + 
+  geom_tile( aes(Plant, Genus, fill= CorCoef))+facet_wrap(~Parameter)+
+  scale_fill_gradient2(low = "#075AFF",
+                       mid = "#FFFFCC",
+                       high = "#FF0000") +
+  theme(axis.text.x = element_text(angle = 90))+
+# geom_text(aes(label = round(CorCoef, digits = 2)), color = "black", size = 3) +
+  theme(legend.position = "none")#+
+  #coord_flip()
+cor_plot
+plotName <- paste("D://Speciale/Data/Time_series/cor_plot.png")
+ggsave(plotName, width = 5, height = 9)
+
+
+
+```
+
+```{r}
+#genera on total
+list <- c(genus_list_dsvi, genus_list_Velocity)
+number <- unique(names(list))
+```
+
+
+
+
+```{r}
+#Subset to Damhusåen
+d_DAM <- amp_subset_samples(d, SampleSite %in% c("Damhusåen"))
+d_DAM <- amp_subset_samples(d_DAM, Tank %in% c("A"))
+d_DAM_settling <- d_DAM
+common_col_names <- intersect(names(d_DAM_settling$metadata), names(Parameters))
+#common_col_names <-common_col_names[-1]
+d_DAM_settling_metadata <- merge(d_DAM_settling$metadata, Parameters, by=common_col_names)
+d_DAM_settling_metadata$Date <- as.Date(d_DAM_settling_metadata$Date, format="%Y-%m-%d")
+#d_DAM_settling_metadata <- unique(d_DAM_settling_metadata)
+d_DAM_settling <- amp_filter_samples(d_DAM_settling, Barcode %in% d_DAM_settling_metadata$Barcode)
+d_DAM_settling$metadata <- merge(d_DAM_settling$metadata, Parameters, by=common_col_names)
+
+
+
+#species ordination
+amp_ordinate(
+  d_DAM_settling,
+  type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+ # sample_shape_by = "SampleSite", 
+  #sample_colorframe_label = "Data_pool",
+  #sample_color_by = "SampleSite",
+  #sample_colorframe_label_size = 3,
+  #sample_colorframe = TRUE,
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=10
+)
+
+```
+
+```{r}
+heatmap <- amp_heatmap(
+  d_DAM_settling, 
+  group_by = "ProjectName",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  #rel_widths = c(0.9,0.1),
+  tax_show = 40,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap
+```
+
+
+
+```{r}
+#Subset to Aalborg West
+d_AAV <- amp_subset_samples(d, SampleSite %in% c("Aalborg Vest", "Aalborg vest", "Aalborg West"))
+d_AAV_settling <- d_AAV
+common_col_names <- intersect(names(d_AAV_settling$metadata), names(Parameters))
+common_col_names <-common_col_names[2:3]
+d_AAV_settling_metadata <- merge(d_AAV_settling$metadata, Parameters, by=common_col_names)
+d_AAV_settling <- amp_filter_samples(d_AAV_settling, Barcode %in% d_AAV_settling_metadata$Barcode)
+d_AAV_settling$metadata <- merge(d_AAV_settling$metadata, Parameters, by=common_col_names)
+d_AAV_settling$metadata <- d_AAV_settling$metadata[-13,]
+
+
+
+#species ordination
+amp_ordinate(
+  d_AAV_settling,
+  type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+ # sample_shape_by = "SampleSite", 
+  #sample_colorframe_label = "Data_pool",
+  #sample_color_by = "SampleSite",
+  #sample_colorframe_label_size = 3,
+  #sample_colorframe = TRUE,
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=10
+)
+
+```
+
+```{r}
+#Subset to Aalborg East
+d_AAØ <- amp_subset_samples(d, SampleSite %in% c("Aalborg Øst", "Aalborg East"))
+d_AAØ_settling <- d_AAØ
+common_col_names <- intersect(names(d_AAØ_settling$metadata), names(Parameters))
+d_AAØ_settling_metadata <- merge(d_AAØ_settling$metadata, Parameters, by=common_col_names)
+d_AAØ_settling <- amp_filter_samples(d_AAØ_settling, Barcode %in% d_AAØ_settling_metadata$Barcode)
+d_AAØ_settling$metadata <- merge(d_AAØ_settling$metadata, Parameters, by=common_col_names)
+
+
+
+#species ordination
+amp_ordinate(
+  d_AAØ_settling,
+  type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+ # sample_shape_by = "SampleSite", 
+  #sample_colorframe_label = "Data_pool",
+  #sample_color_by = "SampleSite",
+  #sample_colorframe_label_size = 3,
+  #sample_colorframe = TRUE,
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=10
+)
+```
+
+```{r}
+#Aggreate genera and investigate correlation
+genus_DAM <- aggregate_abund(
+   d_DAM_settling$abund,
+  d_DAM_settling$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+genus_DAM <- genus_DAM[,-"Abundance"]
+genus_DAM <- distinct(genus_DAM)
+names(genus_DAM)[2] <- "Barcode"
+common_col_names <- intersect(names(genus_DAM), names(d_DAM_settling_metadata))
+genus_DAM <- merge(genus_DAM, d_DAM_settling$metadata, by=common_col_names, allow.cartesian = TRUE)
+genus_DAM  <- as.data.frame(genus_DAM )
+#Filter any Genera with no observations in abundance above 0.1
+Above0.1 <- filter(genus_DAM, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_DAM <- genus_DAM[genus_DAM$Display %in%Above0.1names$Display, ]
+
+genus_list_DAM <- split(genus_DAM, genus_DAM$Display)
+
+
+summary(genus_DAM$Concentration)
+genus_V_DAM <- subset(genus_DAM, Concentration < (0.25+median(genus_DAM$Concentration)) & Concentration > (0.25-median(genus_DAM$Concentration)))
+Above0.1 <- filter(genus_V_DAM, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_V_DAM <- genus_V_DAM[genus_V_DAM$Display %in%Above0.1names$Display, ]
+
+genus_V_list_DAM <- split(genus_V_DAM, genus_V_DAM$Display)
+```
+
+```{r}
+
+
+##Spearman Correlation to DSVI
+Spear_DAM_result_list <- lapply(genus_list_DAM, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_DAM<- do.call(rbind, Spear_DAM_result_list)
+  Spear_DAM<- as.data.frame(Spear_DAM)
+  Spear_DAM<- cbind(rownames(Spear_DAM), data.frame(Spear_DAM, row.names=NULL))
+  names(Spear_DAM)[1] <- "Genus"
+  Spear_DAM<- Spear_DAM[, c("Genus", "p.value", "estimate")]
+  Spear_DAM$p.value <- as.numeric(Spear_DAM$p.value)
+   Spear_DAM$estimate <- as.numeric(Spear_DAM$estimate)
+  Spear_DAM$p.value <- round(Spear_DAM$p.value, digits = 3)
+  Spear_DAM<- subset(Spear_DAM, Spear_DAM$p.value < 0.05)# 249 genera herefter
+names(Spear_DAM)[3] <- "CorCoef"
+   Spear_DAM$Test <- "Spearman"
+   Spear_DAM$Parameter <- "DSVI"
+
+filtSpear_DAM <- subset( Spear_DAM,  Spear_DAM$CorCoef > 0.1 |  Spear_DAM$CorCoef < -0.1)
+ggplot(filtSpear_DAM, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+
+
+##Spearman Correlation to DSVI
+Spear_V_DAM_result_list <- lapply(genus_V_list_DAM, function(df) {
+  cor.test(df[, "Sum"], df[, "NewVelocity"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_V_DAM<- do.call(rbind, Spear_V_DAM_result_list)
+  Spear_V_DAM<- as.data.frame(Spear_V_DAM)
+  Spear_V_DAM<- cbind(rownames(Spear_V_DAM), data.frame(Spear_V_DAM, row.names=NULL))
+  names(Spear_V_DAM)[1] <- "Genus"
+  Spear_V_DAM<- Spear_V_DAM[, c("Genus", "p.value", "estimate")]
+  Spear_V_DAM$p.value <- as.numeric(Spear_V_DAM$p.value)
+   Spear_V_DAM$estimate <- as.numeric(Spear_V_DAM$estimate)
+  Spear_V_DAM$p.value <- round(Spear_V_DAM$p.value, digits = 3)
+  Spear_V_DAM<- subset(Spear_V_DAM, Spear_V_DAM$p.value < 0.05)# 249 genera herefter
+names(Spear_V_DAM)[3] <- "CorCoef"
+   Spear_V_DAM$Test <- "Spearman"
+   Spear_V_DAM$Parameter <- "v_hs"
+
+filtSpear_V_DAM <- subset( Spear_V_DAM,  Spear_V_DAM$CorCoef > 0.1 |  Spear_V_DAM$CorCoef < -0.1)
+ggplot(filtSpear_V_DAM, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+DamCor <- rbind(Spear_DAM, Spear_V_DAM)
+DamCor$Plant  <- "Damhusåen"
+```
+
+```{r}
+#Aggreate genera and investigate correlation
+genus_AAØ <- aggregate_abund(
+   d_AAØ_settling$abund,
+  d_AAØ_settling$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+genus_AAØ <- genus_AAØ[,-"Abundance"]
+genus_AAØ <- distinct(genus_AAØ)
+names(genus_AAØ)[2] <- "Barcode"
+common_col_names <- intersect(names(genus_AAØ), names(d_AAØ_settling_metadata))
+genus_AAØ <- merge(genus_AAØ, d_AAØ_settling$metadata, by=common_col_names, allow.cartesian = TRUE)
+genus_AAØ  <- as.data.frame(genus_AAØ )
+#Filter any Genera with no observations in abundance above 0.1
+Above0.1 <- filter(genus_AAØ, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_AAØ <- genus_AAØ[genus_AAØ$Display %in%Above0.1names$Display, ]
+
+genus_list_AAØ <- split(genus_AAØ, genus_AAØ$Display)
+
+
+
+summary(genus_AAØ$Concentration)
+genus_V_AAØ <- subset(genus_AAØ, Concentration < (0.25+median(genus_AAØ$Concentration)) & Concentration > (0.25-median(genus_AAØ$Concentration)))
+Above0.1 <- filter(genus_V_AAØ, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_V_AAØ <- genus_V_AAØ[genus_V_AAØ$Display %in%Above0.1names$Display, ]
+
+genus_V_list_AAØ <- split(genus_V_AAØ, genus_V_AAØ$Display)
+```
+
+```{r}
+
+
+##Spearman Correlation to DSVI
+Spear_AAØ_result_list <- lapply(genus_list_AAØ, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_AAØ<- do.call(rbind, Spear_AAØ_result_list)
+  Spear_AAØ<- as.data.frame(Spear_AAØ)
+  Spear_AAØ<- cbind(rownames(Spear_AAØ), data.frame(Spear_AAØ, row.names=NULL))
+  names(Spear_AAØ)[1] <- "Genus"
+  Spear_AAØ<- Spear_AAØ[, c("Genus", "p.value", "estimate")]
+  Spear_AAØ$p.value <- as.numeric(Spear_AAØ$p.value)
+   Spear_AAØ$estimate <- as.numeric(Spear_AAØ$estimate)
+  Spear_AAØ$p.value <- round(Spear_AAØ$p.value, digits = 3)
+  Spear_AAØ<- subset(Spear_AAØ, Spear_AAØ$p.value < 0.05)# 249 genera herefter
+names(Spear_AAØ)[3] <- "CorCoef"
+   Spear_AAØ$Test <- "Spearman"
+   Spear_AAØ$Parameter <- "DSVI"
+
+filtSpear_AAØ <- subset( Spear_AAØ,  Spear_AAØ$CorCoef > 0.1 |  Spear_AAØ$CorCoef < -0.1)
+ggplot(filtSpear_AAØ, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+
+
+##Spearman Correlation to DSVI
+Spear_V_AAØ_result_list <- lapply(genus_V_list_AAØ, function(df) {
+  cor.test(df[, "Sum"], df[, "NewVelocity"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_V_AAØ<- do.call(rbind, Spear_V_AAØ_result_list)
+  Spear_V_AAØ<- as.data.frame(Spear_V_AAØ)
+  Spear_V_AAØ<- cbind(rownames(Spear_V_AAØ), data.frame(Spear_V_AAØ, row.names=NULL))
+  names(Spear_V_AAØ)[1] <- "Genus"
+  Spear_V_AAØ<- Spear_V_AAØ[, c("Genus", "p.value", "estimate")]
+  Spear_V_AAØ$p.value <- as.numeric(Spear_V_AAØ$p.value)
+   Spear_V_AAØ$estimate <- as.numeric(Spear_V_AAØ$estimate)
+  Spear_V_AAØ$p.value <- round(Spear_V_AAØ$p.value, digits = 3)
+  Spear_V_AAØ<- subset(Spear_V_AAØ, Spear_V_AAØ$p.value < 0.05)# 249 genera herefter
+names(Spear_V_AAØ)[3] <- "CorCoef"
+   Spear_V_AAØ$Test <- "Spearman"
+   Spear_V_AAØ$Parameter <- "v_hs"
+
+filtSpear_V_AAØ <- subset( Spear_V_AAØ,  Spear_V_AAØ$CorCoef > 0.1 |  Spear_V_AAØ$CorCoef < -0.1)
+ggplot(filtSpear_V_AAØ, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+AAØCor <- rbind(Spear_AAØ, Spear_V_AAØ)
+AAØCor$Plant  <- "Aalborg East"
+```
+
+```{r}
+#Aggreate genera and investigate correlation
+genus_AAV <- aggregate_abund(
+   d_AAV_settling$abund,
+  d_AAV_settling$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+genus_AAV <- genus_AAV[,-"Abundance"]
+genus_AAV <- distinct(genus_AAV)
+names(genus_AAV)[2] <- "Barcode"
+common_col_names <- intersect(names(genus_AAV), names(d_AAV_settling_metadata))
+genus_AAV <- merge(genus_AAV, d_AAV_settling$metadata, by=common_col_names, allow.cartesian = TRUE)
+genus_AAV  <- as.data.frame(genus_AAV )
+#Filter any Genera with no observations in abundance above 0.1
+Above0.1 <- filter(genus_AAV, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_AAV <- genus_AAV[genus_AAV$Display %in%Above0.1names$Display, ]
+
+genus_list_AAV <- split(genus_AAV, genus_AAV$Display)
+
+
+
+
+genus_V_AAV <-genus_AAV
+genus_V_AAV <- subset(genus_V_AAV, n==1)
+summary(genus_V_AAV$Concentration)
+genus_V_AAV <- subset(genus_V_AAV, Concentration < (0.25+median(genus_AAV$Concentration)) & Concentration > (0.25-median(genus_AAV$Concentration)))
+Above0.1 <- filter(genus_V_AAV, Sum >= 0.1)
+Above0.1names <- Above0.1[!duplicated(Above0.1$Display), ]
+genus_V_AAV <- genus_V_AAV[genus_V_AAV$Display %in%Above0.1names$Display, ]
+
+genus_V_list_AAV <- split(genus_V_AAV, genus_V_AAV$Display)
+
+summary(genus_V_AAV$NewVelocity)
+```
+
+```{r}
+
+
+##Spearman Correlation to DSVI
+Spear_AAV_result_list <- lapply(genus_list_AAV, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_AAV<- do.call(rbind, Spear_AAV_result_list)
+  Spear_AAV<- as.data.frame(Spear_AAV)
+  Spear_AAV<- cbind(rownames(Spear_AAV), data.frame(Spear_AAV, row.names=NULL))
+  names(Spear_AAV)[1] <- "Genus"
+  Spear_AAV<- Spear_AAV[, c("Genus", "p.value", "estimate")]
+  Spear_AAV$p.value <- as.numeric(Spear_AAV$p.value)
+   Spear_AAV$estimate <- as.numeric(Spear_AAV$estimate)
+  Spear_AAV$p.value <- round(Spear_AAV$p.value, digits = 3)
+  Spear_AAV<- subset(Spear_AAV, Spear_AAV$p.value < 0.05)# 249 genera herefter
+names(Spear_AAV)[3] <- "CorCoef"
+   Spear_AAV$Test <- "Spearman"
+   Spear_AAV$Parameter <- "DSVI"
+
+filtSpear_AAV <- subset( Spear_AAV,  Spear_AAV$CorCoef > 0.1 |  Spear_AAV$CorCoef < -0.1)
+ggplot(filtSpear_AAV, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+
+
+##Spearman Correlation to DSVI
+Spear_V_AAV_result_list <- lapply(genus_V_list_AAV, function(df) {
+  cor.test(df[, "Sum"], df[, "NewVelocity"], method = "spearman", exact=FALSE)
+})
+
+
+  Spear_V_AAV<- do.call(rbind, Spear_V_AAV_result_list)
+  Spear_V_AAV<- as.data.frame(Spear_V_AAV)
+  Spear_V_AAV<- cbind(rownames(Spear_V_AAV), data.frame(Spear_V_AAV, row.names=NULL))
+  names(Spear_V_AAV)[1] <- "Genus"
+  Spear_V_AAV<- Spear_V_AAV[, c("Genus", "p.value", "estimate")]
+  Spear_V_AAV$p.value <- as.numeric(Spear_V_AAV$p.value)
+   Spear_V_AAV$estimate <- as.numeric(Spear_V_AAV$estimate)
+  Spear_V_AAV$p.value <- round(Spear_V_AAV$p.value, digits = 3)
+  Spear_V_AAV<- subset(Spear_V_AAV, Spear_V_AAV$p.value < 0.05)# 249 genera herefter
+names(Spear_V_AAV)[3] <- "CorCoef"
+   Spear_V_AAV$Test <- "Spearman"
+   Spear_V_AAV$Parameter <- "v_hs"
+
+filtSpear_V_AAV <- subset( Spear_V_AAV,  Spear_V_AAV$CorCoef > 0.1 |  Spear_V_AAV$CorCoef < -0.1)
+ggplot(filtSpear_V_AAV, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0,  vjust = 1)+
+  ggtitle("Spearman correlation")
+
+
+
+
+AAVCor <- rbind(Spear_AAV, Spear_V_AAV)
+AAVCor$Plant  <- "Aalborg West"
+```
+
+```{r}
+Cor_timeseries <- rbind(DamCor, AAØCor, AAVCor)
+Cor_timeseries$Data <- "Smart Settler"
+
+Cor <- rbind( Spear_dsvi ,Spear_Velocity)
+cor_total <- rbind(Cor, Cor_timeseries)
+
+cor_total$Plant <- paste("Smart Settler:",cor_total$Plant, sep = " ")
+
+Biobank_cor <- read.csv( "D://Speciale/Data/Extra data/Biobank_Total_cor.csv")
+Biobank_cor <- subset(Biobank_cor, !Plant %in% c("Mariagerfjord", "Total"))
+Biobank_cor <- Biobank_cor[,-1]
+names(Biobank_cor)[4] <- "Test"
+Biobank_cor$Parameter <- "DSVI"
+Biobank_cor$Data <- "Biobank"
+Biobank_cor$Plant <- paste("Biobank:",Biobank_cor$Plant, sep = " ")
+
+cor_total$Genus <- gsub("; ", ",", cor_total$Genus)
+filt_Biobank_Cor <- subset(Biobank_cor, Genus %in% cor_total$Genus)
+
+cor_total <- rbind(cor_total, filt_Biobank_Cor)
+
+cor_total <- cor_total[order(cor_total$Genus),]
+#cor_total$Genus <- gsub(";", ",", cor_total$Genus)
+
+cor_total$Plant <- factor(cor_total$Plant, levels = c("Smart Settler: Aalborg East", "Smart Settler: Aalborg West","Smart Settler: Damhusåen",  "Smart Settler: Across", "Biobank: Aalborg East", "Biobank: Aalborg West", "Biobank: Damhusåen")) 
+
+filtcor_total <- subset( cor_total, cor_total$CorCoef > 0.7 |  cor_total$CorCoef < -0.7)
+filtfiltcor_total <- subset(cor_total, Genus %in% filtcor_total$Genus)
+
+#filtfiltcor_total_biobank <- subset(filtfiltcor_total, Data =="Biobank")
+
+#filtfiltcor_total_smartsettler <- subset(filtfiltcor_total, Data =="Smart Settler")
+
+ggplot(filtfiltcor_total, aes(Plant, Genus, fill= CorCoef)) + 
+  geom_tile()+facet_wrap(~Parameter)+
+  scale_fill_gradient2(low = "#075AFF",
+                       mid = "#FFFFCC",
+                       high = "#FF0000") +
+  theme(axis.text.x = element_text(angle = 90))+
+ geom_text(aes(label = round(CorCoef, digits = 2)), color = "black", size = 4) +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 12),
+        strip.text.x = element_text(size = 15))#+
+  #coord_flip()
+plotName <- paste("D://Speciale/Data/Time_series/cor_heatmap_total.png")
+ggsave(plotName, width = 10, height = 14)
+
+```
+
+
+
+
