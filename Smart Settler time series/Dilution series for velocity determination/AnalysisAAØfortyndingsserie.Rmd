@@ -1,0 +1,261 @@
+---
+title: "Broad_investigation_collected"
+author: "Vibeke S. Nielsen"
+date: "2022-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Save file to
+```{r}
+path_out<- "D://Speciale/Data/Time_series/AAØfortyndingsserie/"
+fileName <- paste(path_out, "AnalysisAAØ", sep = "")
+```
+
+
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+
+
+```
+
+
+
+#Loading data
+
+```{r}
+Parameters <- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie_parameters.csv")
+Parameters<-Parameters[,c("Date","Dilution.percent","n","SS","Velocity","velocity.slope", "Velocity.intercept")]
+Parameters$NewVelocity <- Parameters$Velocity/1000*3600
+
+AAØ_01.12_10<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie10.csv")
+AAØ_01.12_20<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie20.csv")
+AAØ_01.12_30<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie30.csv")
+AAØ_01.12_40<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie40.csv")
+AAØ_01.12_50<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie50.csv")
+AAØ_01.12_75<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie75.csv")
+AAØ_01.12_100<- read.csv( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØfortyndingsserie100.csv")
+
+```
+
+```{r}
+Parameters <- Parameters[order(as.Date(Parameters$Date, format="%d.%m.%Y")),]
+as.Date(Parameters$Date, format = "%d.%m.%Y")
+
+data01.12 <- Parameters[Parameters$Date == "01.12.2022",]
+data18.01 <- Parameters[Parameters$Date == "18.01.2023",]
+data22.02 <- Parameters[Parameters$Date == "22.02.2023",]
+data28.03 <- Parameters[Parameters$Date == "28.03.2023",]
+```
+
+
+#Fitting Vesilind curves to velocity
+```{r}
+Vesilind_curve <- function(r_V, V_0, X_TSS) (V_0*exp(-r_V*X_TSS))
+Takacs_curve <- function(V_0, r_h, f_hs, r_f, X_TSS) (V_0*(exp(-r_h*(X_TSS-f_hs*X_TSS))-exp(-r_f*(X_TSS-f_hs*X_TSS))))
+
+Vesilind_parameters <- c("Date", "V_0", "r_V")
+
+```
+
+
+
+## Data 01.12
+```{r}
+X_TSS <- data01.12$SS
+
+fit_01.12 <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=data01.12, start=list(r_V=0.5,V_0=10))
+
+summary(fit_01.12)
+
+cc <- coef(fit_01.12)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_01.12 <- ggplot(data =data01.12, mapping=aes(x=SS, y=NewVelocity)) +
+  geom_point(aes())+
+  labs(x="Concentration [g/L]", y="Velocity [m/h]")+ 
+  ggtitle("Vesilind curve fit: AAØ 01.12")+
+  scale_x_continuous(limits = c(0, 10))+
+  scale_y_continuous(limits = c(0, 10))+ 
+  geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_01.12
+
+
+Vesilind_parameters01.12 <- c("01.12.2022", V_0fit, r_Vfit)
+Vesilind_parameters <- rbind(Vesilind_parameters, Vesilind_parameters01.12)
+
+
+
+```
+
+
+```{r}
+X_TSS <- data18.01$SS
+
+fit_18.01 <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=data18.01, start=list(r_V=0.5,V_0=10))
+
+summary(fit_18.01)
+
+cc <- coef(fit_18.01)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_18.01 <- ggplot(data =data18.01, mapping=aes(x=SS, y=NewVelocity)) +
+  geom_point(aes())+
+  labs(x="Concentration [g/L]", y="Velocity [m/h]")+ 
+  ggtitle("Vesilind curve fit: AAØ 18.01")+
+  scale_x_continuous(limits = c(0, 10))+
+  scale_y_continuous(limits = c(0, 10))+ 
+  geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_18.01
+
+Vesilind_parameters18.01 <- c("18.01.2023", V_0fit, r_Vfit)
+Vesilind_parameters <- rbind(Vesilind_parameters, Vesilind_parameters18.01)
+
+```
+
+```{r}
+X_TSS <- data22.02$SS
+
+fit_22.02 <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=data22.02, start=list(r_V=0.5,V_0=10))
+
+summary(fit_22.02)
+
+cc <- coef(fit_22.02)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_22.02 <- ggplot(data =data22.02, mapping=aes(x=SS, y=NewVelocity)) +
+  geom_point(aes())+
+  labs(x="Concentration [g/L]", y="Velocity [m/h]")+ 
+  ggtitle("Vesilind curve fit: AAØ 22.02")+
+  scale_x_continuous(breaks = seq(0, 10, 1))+
+  scale_y_continuous(breaks = seq(0, 10, 1))+ 
+  geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_22.02
+
+Vesilind_parameters22.02 <- c("22.02.2023", V_0fit, r_Vfit)
+Vesilind_parameters <- rbind(Vesilind_parameters, Vesilind_parameters22.02)
+
+```
+
+```{r}
+X_TSS <- data28.03$SS
+
+fit_28.03 <- nls(NewVelocity ~ Vesilind_curve(r_V, V_0, X_TSS), data=data28.03, start=list(r_V=0.5,V_0=10))
+
+summary(fit_28.03)
+
+cc <- coef(fit_28.03)
+r_Vfit <- cc["r_V"]
+V_0fit <- cc["V_0"]
+X_TSSfine <- 0.1*c(0:100)
+df_X_TSSfine <- as.data.frame(X_TSSfine)
+
+Fit_curve_28.03 <- ggplot(data =data28.03, mapping=aes(x=SS, y=NewVelocity)) +
+  geom_point(aes())+
+  labs(x="Concentration [g/L]", y="Velocity [m/h]")+ 
+  ggtitle("Vesilind curve fit: AAØ 28.03")+
+  scale_x_continuous(breaks = seq(0, 10, 1))+
+  scale_y_continuous(breaks = seq(0, 10, 1))+ 
+  geom_line(data= df_X_TSSfine, aes(x=X_TSSfine, y = Vesilind_curve(X_TSSfine,V_0fit,r_Vfit)))
+Fit_curve_28.03
+
+Vesilind_parameters28.03 <- c("28.03.2023", V_0fit, r_Vfit)
+Vesilind_parameters <- rbind.data.frame(Vesilind_parameters, Vesilind_parameters28.03)
+
+Vesilind_parameters$V_0 <- as.numeric(Vesilind_parameters$V_0)
+Vesilind_parameters$r_V<- as.numeric(Vesilind_parameters$r_V)
+names(Vesilind_parameters)[1] <- "Date"
+Vesilind_parameters <- Vesilind_parameters[-1,]
+row.names(Vesilind_parameters) <- NULL
+```
+
+```{r}
+
+
+df_X_TSSfine$Model01.12.2022 <- Vesilind_curve(df_X_TSSfine$X_TSSfine,Vesilind_parameters$V_0[Vesilind_parameters$Date == "01.12.2022"], Vesilind_parameters$r_V[Vesilind_parameters$Date == "01.12.2022"])
+df_X_TSSfine$Model18.01.2023 <- Vesilind_curve(df_X_TSSfine$X_TSSfine,Vesilind_parameters$V_0[Vesilind_parameters$Date == "18.01.2023"], Vesilind_parameters$r_V[Vesilind_parameters$Date == "18.01.2023"])
+df_X_TSSfine$Model22.02.2023 <- Vesilind_curve(df_X_TSSfine$X_TSSfine,Vesilind_parameters$V_0[Vesilind_parameters$Date == "22.02.2023"], Vesilind_parameters$r_V[Vesilind_parameters$Date == "22.02.2023"])
+df_X_TSSfine$Model28.03.2023 <- Vesilind_curve(df_X_TSSfine$X_TSSfine,Vesilind_parameters$V_0[Vesilind_parameters$Date == "28.03.2023"], Vesilind_parameters$r_V[Vesilind_parameters$Date == "28.03.2023"])
+
+df_X_TSSfine_01.12 <- df_X_TSSfine[,1:2]
+df_X_TSSfine_01.12$Date <- "01.12.2022"
+names(df_X_TSSfine_01.12)[] <- c("Concentration", "Velocity", "Date")
+df_X_TSSfine_18.01 <- cbind.data.frame(df_X_TSSfine[,1], df_X_TSSfine[,4])
+df_X_TSSfine_18.01$Date <- "18.01.2023"
+names(df_X_TSSfine_18.01)[] <- c("Concentration", "Velocity", "Date")
+df_X_TSSfine_22.02 <- cbind.data.frame(df_X_TSSfine[,1], df_X_TSSfine[,3])
+df_X_TSSfine_22.02$Date <- "22.02.2023"
+names(df_X_TSSfine_22.02)[] <- c("Concentration", "Velocity", "Date")
+df_X_TSSfine_28.03 <- cbind.data.frame(df_X_TSSfine[,1], df_X_TSSfine[,5])
+df_X_TSSfine_28.03$Date <- "28.03.2023"
+names(df_X_TSSfine_28.03)[] <- c("Concentration", "Velocity", "Date")
+df_X_TSSfine <- rbind(df_X_TSSfine_01.12,df_X_TSSfine_18.01, df_X_TSSfine_22.02, df_X_TSSfine_28.03)
+
+
+data <- rbind(data01.12,data18.01,data22.02,data28.03)
+data$Date <- as.Date(data$Date, format = "%d.%m.%Y")
+data$Date <- as.character(data$Date)
+df_X_TSSfine$Date <- as.Date(df_X_TSSfine$Date, format = "%d.%m.%Y")
+df_X_TSSfine$Date <- as.character(df_X_TSSfine$Date)
+AAØmodels <- ggplot() +
+  geom_point(data =data, mapping=aes(x=SS, y=NewVelocity, color = Date))+
+  labs(x="Concentration [g/L]", y="Hindered Settling Velocity [m/h]")+ 
+  ggtitle("Aalborg East")+
+  scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  scale_y_continuous(limits = c(0, 12), breaks = seq(0, 12, 1))+ 
+ geom_line(data= df_X_TSSfine, aes(x=Concentration, y =Velocity, color=Date))+ 
+  theme(legend.position = "bottom")+guides(color=guide_legend(nrow=2,byrow=TRUE))
+models
+plotName <- paste( "D://Speciale/Data/Time_series/AAØfortyndingsserie/AAØ_Vesilindmodels.png")
+ggsave(plotName, width = 4, height = 5)
+```
+
+
+
+
+```{r}
+#clean up vesilind parameters df
+Vesilind_parameters <- as.data.frame(Vesilind_parameters)
+names(Vesilind_parameters) <- Vesilind_parameters[1,]
+Vesilind_parameters <- Vesilind_parameters[-1,]
+rownames(Vesilind_parameters) <- NULL
+Vesilind_parameters$V_0 <- as.numeric(Vesilind_parameters$V_0)
+Vesilind_parameters$r_V<- as.numeric(Vesilind_parameters$r_V)
+Vesilind_parameters$V_0 <-  round(Vesilind_parameters$V_0, digits = 3)
+Vesilind_parameters$r_V <-  round(Vesilind_parameters$r_V, digits = 3)
+```
+
+
+
+#Write out files
+```{r}
+parameterName <- paste(path_out, "Vesilind_parameters.csv", sep = "")
+write.csv(Vesilind_parameters, parameterName)
+
+
+parameterName <- paste(path_out, "AAØfortyndingsserie_parameters_full.csv", sep = "")
+write.csv(Parameters, parameterName)
+
+
+```
+
