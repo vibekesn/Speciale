@@ -1,0 +1,894 @@
+---
+title: "Ozonation"
+author: "Vibeke S. Nielsen"
+date: "2023-04-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r setup, include=FALSE}
+
+path_out<- "D://Speciale/Data/Ozonation/"
+```
+
+
+
+```{r, include=FALSE}
+# Load packages
+library(ampvis2)
+library(data.table)
+library(doParallel)
+library(tidyverse)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(grid)
+library(gridExtra)
+library(png)
+library(dplyr)
+library(stringr)
+library(scales)
+library(tidyr)
+library(tidyverse)
+library(knitr)
+library(reshape2)
+library(readxl)
+library("lubridate")
+library("ggpp")
+library("ggpmisc")
+install.packages("ggpubr")
+library("ggpubr")
+library("purrr")
+library(stats)
+install.packages("writexl")
+library("writexl")
+
+```
+
+
+#Load datanb
+```{r}
+#import data from txt ASVtable and sintax file:
+d_MUDP <- amp_load(
+otutable = "D://Speciale/Data/Ozonation/ASVtable_notax.tsv",
+taxonomy = "D://Speciale/Data/Ozonation/ASVs.R1.midas481.sintax",
+metadata = "D://Speciale/Data/Ozonation/metadata.xlsx"
+)
+d_MUDP <- amp_subset_samples(
+  d_MUDP,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+metadata <- d_MUDP$metadata
+metadata <- mutate(metadata, SampleSite = factor(SampleSite)) 
+metadata <- mutate(metadata, Campaign = factor(Campaign)) 
+
+#Import process data from Brædstrup WWTP
+wwtpdata <- readxl::read_excel("D://Speciale/Data/Ozonation/wwtp_data.xlsx")
+
+#ajust dataset by making the parameter Line a factor variables. This means that R will treat them as categorical variables instead of continuous. Tip from "Getting started in R"
+wwtpdata <- mutate(wwtpdata, Line = factor(Line)) 
+wwtpdata <- mutate(wwtpdata, Campaign = factor(Campaign)) 
+
+
+#Remove data after 1st Ozone treatment
+d_MUDP <- amp_subset_samples(d_MUDP, !SampleSite == "aau")
+d_MUDP <- amp_subset_samples(d_MUDP, SampleDate <= as.Date('2019-10-30'))
+
+#Order the campaigns chronological 
+d_MUDP$Campaign <- factor(d_MUDP$Campaign , levels = c("Baseline", "On/Off ozone", "1st ozone treatment", "2nd ozone treatment"))
+
+#Subsetting
+d_L1 <- amp_subset_samples(d_MUDP, SampleSite == "L1")
+d_L2 <- amp_subset_samples(d_MUDP, SampleSite == "L2")
+
+d_MUDP$metadata$SampleDate <- as.Date(d_MUDP$metadata$SampleDate, format = "%Y-%m-%d" )
+
+d_MUDP$metadata$Campaign[d_MUDP$metadata$Campaign== "On/Off ozone"] <- "Baseline" 
+#d_MUDP$metadata$Campaign[d_MUDP$metadata$Campaign== "1st ozone"] <- "Ozone treatment" 
+d_MUDP$metadata$SampleSite[d_MUDP$metadata$SampleSite== "L1"] <- "Test line" 
+d_MUDP$metadata$SampleSite[d_MUDP$metadata$SampleSite== "L2"] <- "Control Line" 
+```
+
+
+#Investigate plant data
+```{r}
+#Take out Outlet data
+wwtpdata_PT <- select(wwtpdata, -starts_with("Outlet_"))
+#Take out Inlet data
+wwtpdata_PT <- select(wwtpdata_PT, -starts_with("Inlet_"))
+
+wwtpdata_PT_long <- gather(wwtpdata_PT, key = "Parameter", value = "Observation",  -Date, -Line, -Campaign, -PT_VSS_percent, na.rm = FALSE, convert = TRUE, factor_key = TRUE)
+
+p_PT <- ggplot(data = wwtpdata_PT_long, aes(x = Date, y = Observation, colour=Line)) + 
+    geom_point() + 
+  theme_bw()
+p_PT
+
+pp_PT <- p_PT + facet_grid(Parameter ~ ., scales = "free_y",
+               switch = "y", # flip the facet labels along the y axis from the right side to the left
+               labeller = as_labeller( # redefine the text that shows up for the facets
+                 c(PT_TSS_filtered_g__L = "TSS (g/L)", PT_VSS_g__L = "VSS (g/L)", PT_SVI_mg__g_TSS = "SVI (mg/g TSS)", PT_FSVI_mg__g_TSS = "DSVI (mg/g TSS)", PT_T_C  = "Temperature (C)" ))
+                            )+
+              ylab(NULL) + # remove the word "values"
+              theme(strip.background = element_blank(), # remove the background
+              strip.placement = "outside", # put labels to the left of the axis text
+              #axis.text.x = element_text(size = 20),
+              #axis.title.x = element_text(size = 20),
+              #axis.text.y = element_text(size = 20),
+              #axis.title.y = element_text(size = 25),
+              text = element_text(size = 8)
+              ) +
+       geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-02-04"))), linetype=2, colour="gray38") +     
+       geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-03-25"))), linetype=2, colour="gray38") +
+       geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-07-16"))), linetype=2, colour="gray38")
+
+pp_PT + ggtitle("Process tanks parameters")
+```
+
+
+```{r}
+d_MUDP <- amp_subset_samples(d_MUDP, SampleDate <= as.Date('2019-07-10'))
+heatmap_time <- amp_heatmap(
+  d_MUDP, 
+  group_by = "SampleDate",
+  facet_by = "SampleSite",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values = FALSE,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = FALSE
+)+ theme(legend.position = "bottom",legend.justification = "left", legend.key.size =  unit(1.5, 'cm'),legend.text = element_text(size=10),legend.title = element_text(size=10))
+heatmap_time
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_heatmap_time.png")
+ggsave(plotName, width = 17, height = 10)
+
+heatmap <- amp_heatmap(
+  d_MUDP, 
+  group_by = "SampleSite",
+  facet_by = "Campaign",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE,
+  showRemainingTaxa = TRUE
+)
+heatmap
+plotName <- paste(path_out, "BRÆ_heatmap.png")
+ggsave(plotName, width = 8, height = 10)
+
+
+```
+
+```{r}
+Ordination_Line <- amp_ordinate(
+  d_MUDP,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  #sample_colorframe_label = "Plant",
+  sample_color_by = "SampleDate",
+  sample_shape_by = "SampleSite",
+  sample_colorframe_label_size = 3,
+  #sample_colorframe = TRUE,
+  sample_trajectory = "SampleDate",
+  sample_trajectory_group = "SampleSite",
+  sample_label_by ="SampleDate",
+  repel_labels = FALSE
+)+ 
+  #guides(color = FALSE)+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) 
+
+Ordination_Line
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_Ordination_Line.png")
+ggsave(plotName, width = 7.5, height = 5)
+```
+
+
+```{r}
+axisScale <-10
+
+plant_DSVIandTSS <- ggplot(wwtpdata)+ 
+  geom_line(aes(y=PT_FSVI_mg__g_TSS, x=Date, color=Line))+
+  geom_line(aes(y=PT_TSS_filtered_g__L*axisScale, x=Date, color=Line), linetype="dashed")+
+  labs( x="Date", y="DSVI [mL/g]") +
+  scale_y_continuous(  name = "DSVI [mL/g]",breaks = seq(0, 120, 20),
+    sec.axis = sec_axis( trans=~./axisScale, name="TSS [g/L]", breaks = seq(0, 8, 1)))+    
+  geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-03-20"))), linetype=2, colour="gray38") 
+plant_DSVIandTSS
+plotName <- paste("D://Speciale/Data/Ozonation/BRÆ_dsviTSSline.png")
+ggsave(plotName, width = 7, height = 4.5)
+
+wwtpdata_sub <- subset(wwtpdata, Date <= as.Date("2019-10-30"))
+#wwtpdata_sub$Date <- as.Date(wwtpdata_sub$Date, format="%Y-%m-%d")
+plant_DSVI <- ggplot(wwtpdata_sub)+ 
+  geom_line(aes(y=PT_FSVI_mg__g_TSS, x=Date, color=Line))+
+  labs( x="Date", y="DSVI [mL/g]") +
+  scale_y_continuous( name = "DSVI [mL/g]",breaks = seq(0, 120, 20))+
+  geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-03-20"))), linetype=2, colour="gray38")+ 
+  geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-07-10"))), linetype=2, colour="gray38")+ 
+  theme_bw()+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) 
+plant_DSVI
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_dsviline.png")
+ggsave(plotName, width = 7, height = 4.5)
+
+
+
+plots <- ggarrange(plant_DSVI, Ordination_Line,labels= c("A","B"), ncol=2, legend = "bottom")
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_DSVIandOrd.png")
+ggsave(plotName, width = 10, height = 5)
+```
+
+
+```{r}
+Filaments <- c(
+"g__Acinetobacter",
+"g__Beggiatoa",
+"g__Ca_Alysiosphaera",
+"g__Ca_Amarolinea",
+"g__Ca_Defluviicoccus_seviourii",
+"g__Ca_Microthrix",
+"g__Ca_Nostocoida",
+"g__Ca_Promineofilum",
+"g__Ca_Sarcinithrix",
+"g__Ca_Villigracilis",
+"g__Gordonia",
+"g__Haliscomenobacter",
+"g__Kouleothrix",
+"g__Leptothrix",
+"g__midas_g_105",
+"g__midas_g_1668",
+"g__midas_g_2111",
+"g__midas_g_344",
+"g__midas_s_328",
+"g__Mycobacterium",
+"g__Neomegalonema",
+"g__Skermania",
+"g__Sphaerotilus",
+"g__Thiothrix",
+"g__Trichococcus"
+)
+d_Fila <- amp_subset_taxa(d_MUDP,
+  tax_vector = Filaments
+)
+GAO <- c("g__Defluviicoccus",
+           "g__Propionivibrio",
+           "g__Ca_Competibacter",
+           "g__Ca_Contendobacter",
+           "g__Micropruina",
+           "g__spb280",
+           "g__midas2_CCM19a",
+         "g__Kineosphaera",
+           "g__midas2_sbr-gs28"
+)
+d_GAO <- amp_subset_taxa(d_MUDP,
+  tax_vector = GAO
+)
+PAO <- c("g__Tetrasphaera",
+"g__Dechloromonas",
+"g__Ca_Accumulibacter",
+"g__Tessaracoccus",
+"g__Ca_Obscuribacter",
+"g__Gemmatimonas",
+"g__Microlunatus",
+"g__Friedmanniella",
+"g__Quatrionicoccus",
+"g__Halomonas"
+)
+d_PAO <- amp_subset_taxa(d_MUDP,
+  tax_vector = PAO
+)
+NOB_AOB <- c("g__Nitrosomonas", 
+              "g__Nitrosospira",
+              "g__Nitrosococcus",
+              "g__Nitrosolobus",
+               "g__Nitrosovibrio",
+               'g__Ca_Brocadia',
+              'g__Ca_Scalindua',
+             "g__Nitrobacter",
+               "g__Nitrospira",
+                "g__Nitrotoga",
+                "g__Nitrolancea",
+                'g__Ca_Brocadia',
+             "g__Ellin6067"
+)
+d_NOB_AOB <- amp_subset_taxa(d_MUDP,
+  tax_vector = NOB_AOB
+)
+
+```
+
+```{r}
+top25time <- amp_timeseries(d_MUDP,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 25,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Top 25 ")+ theme(plot.title = element_text(size=20))
+top25time 
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_top25time .png")
+ggsave(plotName, width = 17, height = 10)
+
+d_MUDP_sub <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Trichococcus", "g__midas_g_17", "g__Hyphomicrobium","g__midas_g_832", "g__Ferruginibacter", "g__Defluviimonas", "g__JGI_0001001-H03", "g__Acidovorax", "g__Nitrospira", "g__Stenotrophobacter", "g__CL500-29_marine_group", "g__Terrimonas", "g__Pirellula", "g__Rhodoferax", "g__Ellin6067", "g__Flavobacterium", "g__Dokdonella", "g__Blautia", "g__Tetrasphaera", "g__Ruminococcus", "g__Romboutsia", "g__Rhodobacter","f__Rhizobiaceae", "g__Subdoligranulum", "g__midas_g_120"), remove = TRUE)
+
+top25to50time<- amp_timeseries(d_MUDP_sub,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 25,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Top 26-50 ")+ theme(plot.title = element_text(size=20))
+top25to50time 
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_top25to50time .png")
+ggsave(plotName, width = 17, height = 10)
+```
+
+
+
+```{r}
+OZ_Fila_time <- amp_timeseries(d_Fila,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-20"))),
+                linetype=2, colour="gray38")+
+ # geom_vline(aes(xintercept=as.POSIXct(as.Date("2019-03-20"))), linetype=2, colour="gray38")+ 
+  ggtitle("Filamentous Genera")
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_Fila.png")
+ggsave(plotName, width = 10, height = 5)
+OZ_Fila_time
+
+d_Fila_sub <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Thiothrix","g__Ca_Villigracilis","g__Leptothrix","g__Mycobacterium","g__Gordonia","g__Trichococcus"))
+
+amp_timeseries(d_Fila_sub,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 25,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+
+d_Fila_Thio <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Thiothrix"))
+d_Fila_Lepto <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Leptothrix"))
+d_Fila_Tricho <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Trichococcus"))
+d_Fila_Villi <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Ca_Villigracilis"))
+d_Fila_Gor <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Gordonia"))
+d_Fila_Myco <- amp_subset_taxa(d_MUDP,
+  tax_vector =  c("g__Mycobacterium"))
+
+d_Fila_Thio <- amp_timeseries(d_Fila_Thio,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank() 
+        )+ggtitle("Thiothrix spp. ")
+d_Fila_Thio
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_Fila_Thio.png")
+ggsave(plotName, width = 10, height = 3)
+
+d_Fila_Lepto <- amp_timeseries(d_Fila_Lepto,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)+
+  theme(axis.title.y=element_blank())+ggtitle("Leptothrix spp. ")
+d_Fila_Lepto
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_Fila_Lepto.png")
+ggsave(plotName, width = 10, height = 5)
+
+OZ_Fila_comb <- ggarrange(OZ_Fila_time, d_Fila_Thio, d_Fila_Lepto, nrow=3, common.legend = TRUE, legend="bottom",heights = c(2, 1,2), align = "v")
+OZ_Fila_comb 
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_Fila_Combo.png")
+ggsave(plotName, width = 10, height = 15)
+
+
+amp_timeseries(d_Fila_Gor,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+
+amp_timeseries(d_Fila_Myco,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+```
+
+
+
+```{r}
+  OZ_NOB <- amp_timeseries(d_NOB_AOB,
+    time_variable = "SampleDate",
+    group_by = "SampleSite",
+    split = TRUE,
+    scales = "free_y",
+    tax_show = 3,
+    tax_aggregate = "Genus",
+    tax_add = "Phylum",
+    normalise = FALSE
+  )+
+       geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                  linetype=2, colour="gray38")+
+    theme( legend.key.size = unit(1, 'cm'), #change legend key size
+          #legend.title = element_text(size=13), #change legend title font size
+          legend.text = element_text(size=13),
+          axis.text.x = element_text(size = 13),
+          axis.text.y = element_text(size = 13),
+          axis.title.y = element_text(size = 13),
+          strip.text.x = element_text(size = 13)
+          ) + ggtitle("NOB and AOB genera")
+  OZ_NOB
+  plotName <- paste("D://Speciale/Data/Ozonation/OZ_NOB.png")
+  ggsave(plotName, width = 10, height = 4)
+
+d_NOB_AOB_sub <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Nitrosomonas", 
+               "g__Nitrospira", "g__Ellin6067"))
+d_NOB_AOB_somonas <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Nitrosomonas"))
+d_NOB_AOB_spira <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Nitrospira"))
+
+amp_timeseries(d_NOB_AOB_sub,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 9,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+OZ_nitrosomonas <- amp_timeseries(d_NOB_AOB_somonas,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("Nitrosomonas spp.")
+OZ_nitrospira <- amp_timeseries(d_NOB_AOB_spira,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("Nitrospira spp.")
+
+OZ_NOB_AOB <- ggarrange(OZ_NOB, OZ_nitrospira, OZ_nitrosomonas, nrow = 3, common.legend = TRUE, legend="bottom")
+OZ_NOB_AOB
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_NOB_AOB.png")
+ggsave(plotName, width = 10, height = 12)
+
+```
+
+
+```{r}
+OZ_PAO <- amp_timeseries(d_PAO,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) + ggtitle("PAO genera")
+OZ_PAO
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_PAO.png")
+ggsave(plotName, width = 9, height = 8)
+
+d_PAO_sub <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Tetrasphaera",
+"g__Dechloromonas",
+"g__Ca_Accumulibacter"))
+d_PAO_Tetra <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Tetrasphaera"))
+d_PAO_Dechloro <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Dechloromonas"))
+d_PAO_Accum <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Ca_Accumulibacter"))
+d_PAO_Tessera <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Tessaracoccus"))
+d_PAO_Obscur <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Ca_Obscuribacter"))
+
+amp_timeseries(d_PAO_sub,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 25,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+
+
+
+OZ_PAO_Dechloro <- amp_timeseries(d_PAO_Dechloro,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Species",
+#  tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Dechloromonas spp.")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) 
+
+title <-  expression(paste( italic("Ca."), "Accumulibacter spp."))
+OZ_PAO_Accum <- amp_timeseries(d_PAO_Accum,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+ # tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle(title)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) 
+
+OZ_PAO_Tetra <-amp_timeseries(d_PAO_Tetra,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+ # tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Tetrasphaera spp.")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) 
+
+
+
+OZ_PAO_combo <- ggarrange(OZ_PAO_Tetra, OZ_PAO_Dechloro,  OZ_PAO_Accum, nrow = 3, heights = c( 1,1.75,1),common.legend = TRUE, legend="bottom")
+OZ_PAO_combo
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_PAO_combo.png")
+ggsave(plotName, width = 9, height = 12)
+
+```
+
+
+
+```{r}
+amp_timeseries(d_GAO,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)
+
+
+d_GAO_sub <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Propionivibrio", "Micropruina"))
+
+
+amp_timeseries(d_GAO_sub,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 25,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+
+
+```
+
+
+```{r}
+
+d_others <- amp_subset_taxa(d_MUDP,
+  tax_vector = c(NOB_AOB,PAO,Filaments), remove=TRUE
+)
+
+d_others <- amp_subset_taxa(d_others,
+  tax_vector = c( "g__Romboutsia", "g__CL500-29_marine_group", "g__Acidovorax", "g__Proteiniclasticum", "g__Christensenellaceae_R-7_group", "g__midas_g_343", "g__Dokdonella", "f__Clostridiaceae", "g__Novosphingobium", "g__Rominucoccus", "f__Rhizobiaceae", "g__Bradyrhizobium", "g__Pirellula", "g__Agathobacter", "g__Chryseobacterium", "g__Propioniciclava", "g__Pedomicrobium", "g__midas_g_1498", "g__Simplicispira", "g__Fusicatenibacter", "g__midas_g_100", "g__SH-PL14", "g__Devosia", "g__Paracoccus"), remove=TRUE)
+
+
+OZ_others <- amp_timeseries(d_others,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 20,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) + ggtitle("Other genera in Brædstrup WWTP")
+OZ_others
+plotName <- paste("D://Speciale/Data/Ozonation/OZ_others.png")
+ggsave(plotName, width = 19, height = 12)
+
+
+
+d_patesci <- amp_subset_taxa(d_others,
+  tax_vector = c("p__Patescibacteria") )
+
+OZ_patesci <- amp_timeseries(d_patesci,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 20,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-03-25"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        #legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 15),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size = 18)
+        ) + ggtitle("Other genera in Brædstrup WWTP")
+OZ_patesci
+```
+
+
+
+```{r}
+d_MUDP_interest <- amp_subset_taxa(d_MUDP,
+  tax_vector = c("g__Rhodoferax", "g__midas_g_59", "g__Rhodobacter", "g__Defluviimonas", "g__Hyphomicrobium", "g__midas_g_832", "g__Ca_Epiflobacter", "g__Terrimonas", "g__midas_g_120"))
+
+
+amp_timeseries(d_MUDP_interest,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 10,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)
+
+amp_timeseries(d_MUDP_interest,
+  time_variable = "SampleDate",
+  group_by = "SampleSite",
+  split = TRUE,
+  scales = "free_y",
+  tax_show = 36,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  normalise = FALSE
+)
+
+```
+
+
+
+
+```{r}
+wwtpdata_sub <- wwtpdata[,c("Date","Campaign","Line","PT_TSS_filtered_g__L","PT_FSVI_mg__g_TSS")]
+names(wwtpdata_sub)[4]<- "TSS"
+names(wwtpdata_sub)[5]<- "DSVI"
+wwtpdata_sub$Week <- lubridate::isoweek(wwtpdata_sub$Date)
+
+names(d_MUDP$metadata)[10] <- "Date"
+names(d_MUDP$metadata)[9] <- "Line"
+d_MUDP$metadata$Week <- lubridate::isoweek(d_MUDP$metadata$Date)
+#merge settling data to dna data
+common_col_names <- intersect(names(d_MUDP$metadata), names(wwtpdata_sub ))
+DSVImerged <- merge(d_MUDP$metadata,wwtpdata_sub, by= c("Campaign","Line","Week") )
+
+d_MUDP_DSVI <- amp_filter_samples(d_MUDP, SeqID %in% DSVImerged$SeqID)
+d_MUDP_DSVI$metadata <-DSVImerged 
+
+```
+
+
+```{r}
+#aggregate genus
+d_MUDP_DSVI_genus <- aggregate_abund(
+   d_MUDP_DSVI$abund,
+ d_MUDP_DSVI$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+#merge to DSVI 
+names(d_MUDP_DSVI$metadata)[4] <- "Sample"
+common_col_names <- intersect(names(d_MUDP_DSVI_genus), names(d_MUDP_DSVI$metadata))
+d_MUDP_DSVI_genus <- merge(d_MUDP_DSVI_genus, d_MUDP_DSVI$metadata, by=common_col_names,allow.cartesian=TRUE)
+d_MUDP_DSVI_genus  <- as.data.frame(d_MUDP_DSVI_genus)
+d_MUDP_DSVI_genus_list <- split(d_MUDP_DSVI_genus,d_MUDP_DSVI_genus$Display)
+#Remove genera if all samples are less than 0.1 abund
+mean_genusabund <- mean(d_MUDP_DSVI_genus$Sum)
+keep_rows <- sapply(d_MUDP_DSVI_genus_list, function(df) any(df[, "Sum"] >= 2))
+d_MUDP_DSVI_genus_list <- d_MUDP_DSVI_genus_list[keep_rows]
+d_MUDP_DSVI_genus <- do.call(rbind, d_MUDP_DSVI_genus_list)
+  d_MUDP_DSVI_genus <- as.data.frame(d_MUDP_DSVI_genus)
+ d_MUDP_DSVI_genus <- cbind(rownames(d_MUDP_DSVI_genus), data.frame(d_MUDP_DSVI_genus, row.names=NULL))
+ names(d_MUDP_DSVI_genus)[3] <- "genus"
+ 
+
+
+ggscatter(d_MUDP_DSVI_genus, x = "DSVI", y = "Sum", size = 0.3,
+          color = "Line",
+          facet.by = "genus", scales = "free", ncol=5,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Line), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")
+
+ggscatter(d_MUDP_DSVI_genus, x = "DSVI", y = "Sum", size = 0.3,
+          color = "Line",
+          facet.by = "genus", scales = "free", ncol=5,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Line), method = "pearson")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")
+
+#didn't lead to anything
+```
+
+

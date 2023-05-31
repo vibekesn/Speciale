@@ -1,0 +1,2262 @@
+---
+title: "Hydrocycloner"
+author: "Vibeke S. Nielsen"
+date: "2023-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load packages
+library(ampvis2)
+library(data.table)
+library(doParallel)
+library(tidyverse)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(grid)
+library(gridExtra)
+library(png)
+library(dplyr)
+library(stringr)
+library(scales)
+library(tidyr)
+library(tidyverse)
+library(knitr)
+library(reshape2)
+library(readxl)
+library("lubridate")
+library("ggpp")
+library("ggpmisc")
+install.packages("ggpubr")
+library("ggpubr")
+library("purrr")
+library(stats)
+install.packages("writexl")
+library("writexl")
+library(patchwork)
+
+```
+
+```{r}
+  path_out<- "D://Speciale/Data/Hydrocycloner/"
+```
+
+
+
+
+```{r}
+
+#d <- amp_load(otutable = "C://Users/Hening/Documents/GitHub/amplicon_data/midas_sweden/ASVtable_midas481/ASVtable_midas481.tsv",
+#              metadata = "C://Users/Hening/Documents/GitHub/amplicon_data/midas_sweden/metadata.csv")
+#d$metadata$Date <- as.Date(as.character(d$metadata$Date), format = c("%d-%m-%Y"))
+#dn <- amp_subset_samples(d, minreads = 10000, normalise = TRUE)
+#bac <- amp_subset_samples(dn, Primer %in% c("Bacteria"))
+#as.bac <- amp_subset_samples(bac, !Line %in% c("AD", "AD-1", "AD-2", "AD-7", "AD-4", "AD-6"))
+#as.bac.s <- amp_subset_samples(as.bac, !Plant %in% c("CTRL"))
+
+#remove MBBR samples from AS collection
+#as.bac.s <- amp_subset_samples(as.bac.s, ID %in% c("Activated sludge"))
+#d_SKA <- amp_subset_samples(as.bac.s, Plant %in% c("Skansverket"))
+
+#amp_export_otutable(d_SKA, md5 = TRUE, filename = "biobank_SKA", sep = "\t")
+#write.csv(d_SKA_metadata, "biobank_SKA_metadata.csv")
+
+d_SKA <- amp_load(otutable = "D://Speciale/Data/Hydrocycloner/biobank_SKA_03ddc1a9083f7e29e453ab20d6e620b9.csv",
+              metadata = "D://Speciale/Data/Hydrocycloner/metadata.csv")
+
+d_SKA$metadata <- d_SKA$metadata[,-4]
+d_SKA$metadata <- d_SKA$metadata[,-4]
+d_SKA$metadata <- d_SKA$metadata[,-7]
+d_SKA$metadata$Date <- as.Date(d_SKA$metadata$Date, format="%d-%m-%Y")
+d_SKA$metadata$Line[d_SKA$metadata$Line== "AS"] <- "After start of treatment"
+d_SKA <- filter_otus(d_SKA, filter_otus = 0.1)
+d_SKA_metadata <- d_SKA$metadata
+
+
+d_SKA$metadata$Line <- factor(d_SKA$metadata$Line , levels = c("Before treatment", "After start of treatment", "HC-O", "HC-U"))
+
+```
+
+```{r}
+#load VIB
+d_VIB <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_VIB_12d03cc6d874a70286231350637684a9.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_VIB_metadata.csv"
+)
+
+d_VIB <- amp_subset_samples(
+  d_VIB,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+
+d_VIB$metadata <- d_VIB$metadata[2:11]
+d_VIB$metadata <- d_VIB$metadata[,-7]
+d_VIB$metadata$Line[d_VIB$metadata$Line== ""] <- "After start of treatment"
+d_VIB$metadata$Line[d_VIB$metadata$Line== "LT"] <- "Before treatment"
+d_VIB_sub <- amp_subset_samples(d_VIB, d_VIB$metadata$Year >= 2020 & d_VIB$metadata$Line =="Before treatment" )
+d_VIB <- amp_subset_samples(d_VIB, !Sample %in% d_VIB_sub$metadata$Sample)
+d_VIB$metadata$Date <- as.Date(d_VIB$metadata$Date, format="%Y-%m-%d")
+#d_VIB$metadata$Quarter <- paste0(year(d_VIB$metadata$Date),         # Convert dates to quarterly
+#                             "/0",
+#                             quarter(d_VIB$metadata$Date))
+#d_VIB$metadata$Quarter[d_VIB$metadata$Line== "post-S::Select"] <- "Overall Average"
+#d_VIB$metadata$Quarter[d_VIB$metadata$Line== "pre-S::Select"] <- "Overall Average"
+d_VIB <- filter_otus(d_VIB, filter_otus = 0.1)
+
+
+d_VIB$metadata$Year <- lubridate::isoyear(d_VIB$metadata$Date)
+library(zoo)
+d_VIB$metadata$YearMonth <- as.yearmon(paste(d_VIB$metadata$Year, month(d_VIB$metadata$Date)), format = "%Y %m")
+d_VIB$metadata$Quarter<- quarter(d_VIB$metadata$Date, with_year = TRUE)
+
+d_VIB$metadata$Line <- factor(d_VIB$metadata$Line , levels = c("Before treatment", "After start of treatment", "HC-O", "HC-U"))
+
+d_VIB <-  amp_subset_samples(d_VIB, Date < "2020-10-01" & Date > "2019-04-01")
+d_VIB <-  amp_subset_samples(d_VIB,!( Line == "Before treatment" & Date >= "2019-11-01"))
+d_VIB <-  amp_subset_samples(d_VIB,!( Line == "After start of treatment" & Date <= "2019-11-01"))
+d_VIB <- amp_subset_samples(d_VIB, !(Line=="HC-O" & Date=="2020-09-01"))
+
+d_VIB_metadata <- d_VIB$metadata
+```
+
+```{r}
+d_AAW <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_AAW_2448c73144695bd8292108ed800651e5.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_AAW_metadata.xlsx"
+)
+d_AAW$metadata$Date <- as.Date(d_AAW$metadata$Date, format = "%Y-%m-%d" )
+d_AAW <- amp_subset_samples(
+  d_AAW,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+
+
+d_AAW$metadata <- d_AAW$metadata[1:10]
+d_AAW$metadata <-d_AAW$metadata[,-7]
+d_AAW$metadata$Line[is.na(d_AAW$metadata$Line)] <- "After start of treatment"
+d_AAW$metadata$Line[d_AAW$metadata$Line== "S::Select"] <- "After start of treatment"
+d_AAW$metadata$Line[d_AAW$metadata$Line== "pre-S::Select"] <- "Before treatment"
+d_AAW$metadata$Date <- as.Date(d_AAW$metadata$Date, format="%Y-%m-%d")
+#d_AAW$metadata$Quarter <- paste0(year(d_AAW$metadata$Date),         # Convert dates to quarterly
+ #                            "/0",
+ #                            quarter(d_AAW$metadata$Date))
+#d_AAW$metadata$Quarter[d_AAW$metadata$Line== "post-S::Select"] <- "Overall Average"
+#d_AAW$metadata$Quarter[d_AAW$metadata$Line== "pre-S::Select"] <- "Overall Average"
+d_AAW$metadata$Plant[d_AAW$metadata$Plant=="Aalborg W"] <- "Aalborg West"
+d_AAW <- filter_otus(d_AAW, filter_otus = 0.1)
+
+
+d_AAW$metadata$Year <- lubridate::isoyear(d_AAW$metadata$Date)
+install.packages("zoo")
+library("zoo")
+d_AAW$metadata$YearMonth <- as.yearmon(paste(d_AAW$metadata$Year, month(d_AAW$metadata$Date)), format = "%Y %m")
+d_AAW$metadata$Quarter<- quarter(d_AAW$metadata$Date, with_year = TRUE)
+
+d_AAW$metadata$Line <- factor(d_AAW$metadata$Line , levels = c("Before treatment", "After start of treatment", "HC-O", "HC-U"))
+
+d_AAW <-  amp_subset_samples(d_AAW, Date < "2020-10-01" & Date > "2019-04-01")
+d_AAW_metadata <- d_AAW$metadata
+```
+
+```{r}
+d <- amp_merge_ampvis2(
+  d_AAW,
+  d_SKA,
+  d_VIB, by_refseq = FALSE
+)
+d$metadata$Year <- lubridate::isoyear(d$metadata$Date)
+
+d_sub <- amp_merge_ampvis2(
+  d_AAW,
+  d_VIB, by_refseq = FALSE
+)
+d_sub$metadata$Year <- lubridate::isoyear(d_sub$metadata$Date)
+library(zoo)
+d_sub$metadata$YearMonth <- as.yearmon(paste(d_sub$metadata$Year, month(d_sub$metadata$Date)), format = "%Y %m")
+d_sub$metadata$Quarter<- quarter(d_sub$metadata$Date, with_year = TRUE)
+
+d_sub_metadata <- d_sub$metadata
+```
+
+
+
+```{r}
+heatmap_collected <- amp_heatmap(
+  amp_subset_samples(d), 
+  group_by = "Line",
+  facet_by = "Plant",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.8,0.2),
+  tax_show = 50,
+  plot_values = FALSE,
+  #plot_values_size = 5,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap_collected$heatmap <- heatmap_collected$heatmap +  theme(
+        legend.key.size = unit(1, 'cm'), 
+        legend.title = element_text(size=15),
+        legend.text = element_text(size=15),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        strip.text.x = element_text(size = 15)) 
+heatmap_collected$functions  <- heatmap_collected$functions + 
+  theme(legend.title = element_text(size=15),
+        legend.text = element_text(size=15),
+        axis.text.x = element_text(size = 14)) 
+
+
+
+heatmap_collected 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_collected.png")
+ggsave(plotName, width = 13, height = 11)
+```
+
+
+```{r}
+heatmap_ba <- amp_heatmap(
+  amp_subset_samples(d_sub, Line== c("After start of treatment", "Before treatment")), 
+  group_by = "Line",
+  facet_by = "Plant",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.8,0.2),
+  tax_show = 50,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap_ba
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_ba.png")
+ggsave(plotName, width = 10, height = 8.5)
+
+
+
+heatmap_ba_time <- amp_heatmap(
+  amp_subset_samples(d_sub, Line== c("After start of treatment", "Before treatment")), 
+  group_by = "Date",
+  facet_by = "Plant",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values = FALSE,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap_ba_time
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_ba_time.png")
+ggsave(plotName, width = 17, height = 9)
+
+
+
+```
+
+
+```{r}
+heatmap_HC <- amp_heatmap(
+  amp_subset_samples(d, Line== c("HC-O", "HC-U")), 
+  group_by = "Line",
+  facet_by = "Plant",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.8,0.2),
+  tax_show = 50,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap_HC
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_HC.png")
+ggsave(plotName, width = 10, height = 14)
+
+heatmap_HC_time <- amp_heatmap(
+  amp_subset_samples(d_sub, Line== c("HC-O", "HC-U")), 
+  group_by = "Date",
+  facet_by = c("Plant","Line"),
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values = FALSE,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE
+)
+heatmap_HC_time
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_HC_time.png")
+ggsave(plotName, width = 16, height = 8.5)
+
+heatmap_HC_species <- amp_heatmap(
+  amp_subset_samples(d, Line== c("HC-O", "HC-U")), 
+  group_by = "Line",
+  facet_by = "Plant",
+  tax_aggregate = "Species", 
+  tax_add = "Genus",
+  normalise = FALSE,
+  max_abundance = 35,
+  #functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  #rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  #plot_functions = TRUE
+)
+heatmap_HC_species
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/heatmap_HC_species.png")
+ggsave(plotName, width = 10, height = 8.5)
+```
+
+
+
+```{r}
+dd <- union(d_AAW$metadata$Line, d_SKA$metadata$Line)
+dd.col <- hue_pal()(length(dd))
+names(dd.col)  <- dd
+```
+
+
+
+```{r}
+
+d_VIB_metadata <- d_VIB$metadata
+VIB_ordintation <- amp_ordinate(
+  d_VIB,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  #sample_colorframe_label = "Line",
+  sample_color_by = "Line",
+  #sample_shape_by = "Plant",
+  sample_label_by="Date",
+  #sample_colorframe_label_size = 8,
+  #repel_labels=FALSE,
+  #sample_colorframe = TRUE,
+  sample_trajectory = "Date",
+  sample_trajectory_group = "Line"
+)+labs(title = "Viby")+
+  scale_color_manual("Line", values = dd.col)
+VIB_ordintation
+
+AAW_ordintation <- amp_ordinate(
+  d_AAW,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  #sample_colorframe_label = "Line",
+  sample_color_by = "Line",
+  sample_label_by="Date",
+  #sample_colorframe_label_size = 8,
+  #repel_labels=FALSE,
+  sample_trajectory = "Date",
+  sample_trajectory_group = "Line"
+)+labs(title = "Aalborg West")+
+  scale_color_manual("Line", values = dd.col)
+AAW_ordintation
+
+
+SKA_ordintation <- amp_ordinate(
+  d_SKA,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_label_by="Date",
+  #sample_colorframe_label_size = 8,
+  #repel_labels=FALSE,
+  sample_color_by = "Line",
+  #sample_shape_by = "Plant",
+  #sample_colorframe_label_size = 8,
+  #sample_colorframe = TRUE,
+  sample_trajectory = "Date",
+  sample_trajectory_group = "Line"   
+)+labs(title = "Skansverket")+theme(legend.position = "none")+
+  scale_color_manual("Line", values = dd.col)
+SKA_ordintation
+
+#ggarrange(VIB_ordintation, AAW_ordintation, SKA_ordintation, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+ordination_plots <- list(VIB_ordintation, AAW_ordintation, SKA_ordintation) |>
+  wrap_plots(nrow = 2) +
+  guide_area() +
+  plot_layout(guides = "collect")
+
+ordination_plots
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/Ordination.png")
+ggsave(plotName, width = 8, height = 6)
+```
+
+
+```{r}
+# defining seasons
+spring <- data.frame(xstart=as.Date(c("2019-03-01","2020-03-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2019-05-31","2020-05-31","2021-05-31"),format = c("%Y-%m-%d")))
+summer <- data.frame(xstart=as.Date(c("2019-06-01","2020-06-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2019-08-31","2020-08-31"),format = c("%Y-%m-%d")))
+fall <- data.frame(xstart=as.Date(c("2019-09-01","2020-09-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2019-11-30","2020-11-30"),format = c("%Y-%m-%d")))
+winter <- data.frame(xstart=as.Date(c("2020-01-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2020-02-31"),format = c("%Y-%m-%d")))
+```
+
+```{r}
+VIB_DSVI <- read_excel( "D://Speciale/Data/Hydrocycloner/DSVI_Viby_2019-2023.xlsx", sheet = "Ark1", col_types = c("date", "numeric", "numeric", "text"))
+names(VIB_DSVI)[1] <- "Date"
+VIB_DSVI$Date <- as.Date(VIB_DSVI$Date, format="%d-%m-%Y %h-%m-%s")
+VIB_DSVI <- subset(VIB_DSVI, Date < "2023-01-01")
+
+#VIB_DSVI <- subset(VIB_DSVI, Date >"2019-04-01" & Date<"2020-09-01")
+
+AAW_DSVI_2018<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2018", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2019<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2019", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2020<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2020", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2021<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2021", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2022<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2022", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_list <-  list(AAW_DSVI_2018, AAW_DSVI_2019, AAW_DSVI_2020, AAW_DSVI_2021, AAW_DSVI_2022)
+AAW_DSVI <- do.call(rbind, AAW_DSVI_list)
+AAW_DSVI <- AAW_DSVI[,1:7]
+AAW_DSVI$dSVI[is.na(AAW_DSVI$dSVI)] <- AAW_DSVI$SVI[is.na(AAW_DSVI$dSVI)]
+AAW_DSVI$Date <- as.Date(AAW_DSVI$Date, format = "%d. %B-%Y" )
+names(AAW_DSVI)[3] <- "SS"
+names(AAW_DSVI)[7] <- "DSVI"
+AAW_DSVI <- AAW_DSVI[,c("Date", "SS", "SVI", "DSVI")]
+
+#AAW_DSVI <- subset(AAW_DSVI, Date >"2019-04-01" & Date<"2020-09-01")
+
+
+AAW_DSVI_plot <- ggplot(AAW_DSVI)+
+  geom_line( mapping=aes(x=Date, y=DSVI, color="DSVI"))+
+  scale_y_continuous(  name = "DSVI [mL/g]",breaks = seq(0, 200, 50))+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),linetype=2, colour="gray38")+
+  scale_x_date(breaks = "3 month", date_labels="%Y-%m-%d",guide = guide_axis(angle = 90))+
+  geom_hline(yintercept = 120,linetype=3, colour="red")+
+  ggtitle("Aalborg West") +
+  theme(legend.position = "none",
+        axis.title.x = element_blank())+ 
+    guides(color = FALSE)
+AAW_DSVI_plot
+data_com <- data.frame(xstart=as.Date("2020-05-07",format = c("%Y-%m-%d")), xend=as.Date("2020-07-01",format = c("%Y-%m-%d")))
+old_mixer <- data.frame(xstart=as.Date("2021-01-05",format = c("%Y-%m-%d")),xend=as.Date("2021-06-30",format = c("%Y-%m-%d")))
+
+VIB_DSVI_plot <-ggplot(VIB_DSVI)+
+  geom_line( mapping=aes(x=Date, y=DSVI, color="DSVI"))+
+  geom_line( mapping=aes(x=Date, y=V_hs*40, color="v_hs"))+
+  scale_y_continuous(  name = "DSVI [mL/g]",breaks = seq(0, 250,50),
+    sec.axis = sec_axis( trans=~./40, name="v_hs [m/h]", breaks = seq(0, 6, 2)))+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),linetype=2, colour="gray38")+
+  geom_hline(yintercept = 120,linetype=3, colour="red")+
+  scale_x_date(breaks = "2 month", date_labels="%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(title="Viby", color=NULL) +theme(legend.position = "bottom")+
+  geom_rect(data=data_com, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#F9CC87", color=NA)+
+  geom_rect(data=old_mixer, mapping=aes(xmin =xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#F9CC87", color=NA) 
+VIB_DSVI_plot
+ggarrange(AAW_DSVI_plot, VIB_DSVI_plot, nrow=2, align="v", heights = c(1.4,2))
+plotName <- paste("D://Speciale/Data/Hydrocycloner/DSVI_timeline.png")
+ggsave(plotName, width = 7, height = 5)
+
+```
+
+
+
+```{r}
+Filaments <- c(
+"g__Acinetobacter",
+"g__Beggiatoa",
+"g__Ca_Alysiosphaera",
+"g__Ca_Amarolinea",
+"g__Ca_Defluviicoccus_seviourii",
+"g__Ca_Microthrix",
+"g__Ca_Nostocoida",
+"g__Ca_Promineofilum",
+"g__Ca_Sarcinithrix",
+"g__Ca_Villigracilis",
+"g__Gordonia",
+"g__Haliscomenobacter",
+"g__Kouleothrix",
+"g__Leptothrix",
+"g__midas_g_105",
+"g__midas_g_1668",
+"g__midas_g_2111",
+"g__midas_g_344",
+"g__midas_s_328",
+"g__Mycobacterium",
+"g__Neomegalonema",
+"g__Skermania",
+"g__Sphaerotilus",
+"g__Thiothrix",
+"g__Trichococcus"
+)
+
+GAO <- c("g__Defluviicoccus",
+           "g__Propionivibrio",
+           "g__Ca_Competibacter",
+           "g__Ca_Contendobacter",
+           "g__Micropruina",
+           "g__spb280",
+           "g__midas2_CCM19a",
+         "g__Kineosphaera",
+           "g__midas2_sbr-gs28"
+)
+#d_GAO <- amp_subset_taxa(d,
+#  tax_vector = GAO
+#)
+PAO <- c("g__Tetrasphaera",
+"g__Dechloromonas",
+"g__Ca_Accumulibacter",
+"g__Tessaracoccus",
+"g__Ca_Obscuribacter",
+"g__Gemmatimonas",
+"g__Microlunatus",
+"g__Friedmanniella",
+"g__Quatrionicoccus",
+"g__Halomonas"
+)
+#d_PAO <- amp_subset_taxa(d,
+#  tax_vector = PAO
+#)
+NOB_AOB <- c("g__Nitrosomonas", 
+              "g__Nitrosospira",
+              "g__Nitrosococcus",
+              "g__Nitrosolobus",
+               "g__Nitrosovibrio",
+               'g__Ca_Brocadia',
+              'g__Ca_Scalindua',
+             "g__Nitrobacter",
+               "g__Nitrospira",
+                "g__Nitrotoga",
+                "g__Nitrolancea",
+                'g__Ca_Brocadia'
+)
+#d_NOB_AOB <- amp_subset_taxa(d,
+#  tax_vector = NOB_AOB
+#)
+```
+
+
+
+```{r}
+
+
+d_Fila_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = Filaments)
+d_Fila_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = Filaments)
+d_Fila_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = Filaments)
+d_PAO_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = PAO)
+d_PAO_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = PAO)
+d_PAO_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = PAO)
+d_NOB_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = NOB_AOB)
+d_NOB_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = NOB_AOB)
+d_NOB_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = NOB_AOB)
+d_others_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+d_others_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+d_others_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+d_GAO_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO))
+d_GAO_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO))
+d_GAO_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = c(GAO))
+
+
+d_Fila <- amp_subset_taxa(d_sub,
+  tax_vector = Filaments)
+d_NOB_AOB <- amp_subset_taxa(d_sub,
+  tax_vector = NOB_AOB)
+d_PAO <- amp_subset_taxa(d_sub,
+  tax_vector = PAO)
+d_GAO <- amp_subset_taxa(d_sub,
+  tax_vector = GAO)
+d_others <- amp_subset_taxa(d_sub,
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+```
+
+
+
+
+
+```{r}
+
+
+
+GAO_AAW <- amp_timeseries(d_GAO_AAW,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("GAO genera: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+GAO_AAW
+
+GAO_VIB <- amp_timeseries(d_GAO_VIB,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 2,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("GAO genera: Viby")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+GAO_VIB
+GAO_combo <- ggarrange(GAO_AAW,GAO_VIB, common.legend = TRUE, legend = "bottom", 
+                        nrow=2, heights = c(1,1) )
+GAO_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/GAO_combo.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+```
+
+
+
+
+
+```{r}
+d_others_AAW <- filter_otus(d_others_AAW, filter_otus = 0.5)
+d_others_VIB <- filter_otus(d_others_VIB, filter_otus = 0.5)
+genus <- c(intersect(d_others_AAW$tax$Genus, d_others_VIB$tax$Genus))
+d_others_AAW <- amp_subset_taxa(d_others_AAW, 
+  tax_vector = genus)
+d_others_VIB <- amp_subset_taxa(d_others_VIB, 
+  tax_vector = genus)
+#genus <- intersect(genus, d_others_SKA$tax$Genus)
+#s_others_SKA <- subset(s_others_SKA, Display %in% genus)
+#s_others_AAW <- subset(s_others_AAW, Display %in% genus)
+#s_others_VIB <- subset(s_others_VIB, Display %in% genus)
+
+
+others_AAW <- amp_timeseries(d_others_AAW,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 16,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Other abundant genera: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+others_AAW
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/others_AAW ba.png")
+ggsave(plotName, width = 17, height = 10.5)
+
+
+others_VIB <- amp_timeseries(d_others_VIB,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 20,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Other abundant genera: Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+
+others_VIB
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/others_VIB ba.png")
+ggsave(plotName, width = 17, height = 10.5)
+```
+
+
+
+```{r}
+NOB_AAW <- amp_timeseries(d_NOB_AAW,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("AOB and NOB genera: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOB_AAW
+
+
+NOB_VIB <- amp_timeseries(d_NOB_VIB,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("AOB and NOB genera: Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+
+NOB_VIB
+
+NOB_combo <- ggarrange(NOB_AAW,NOB_VIB, common.legend = TRUE, legend = "bottom", 
+                        nrow=2, heights = c(1,1.2) )
+NOB_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/NOB_combo.png")
+ggsave(plotName, width = 10, height = 7)
+
+
+
+d_AAW_N.spira <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrospira")
+d_AAW_N.somonas <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrosomonas")
+d_AAW_N.toga <- amp_subset_taxa(amp_subset_samples(d_AAW, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrotoga")
+d_VIB_N.spira <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrospira")
+d_VIB_N.somonas <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrosomonas")
+d_VIB_N.toga <- amp_subset_taxa(amp_subset_samples(d_VIB, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrotoga")
+d_SKA_N.spira <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrospira")
+d_SKA_N.somonas <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrosomonas")
+d_SKA_N.toga <- amp_subset_taxa(amp_subset_samples(d_SKA, Line== c("Before treatment", "After start of treatment") ),
+  tax_vector = "g__Nitrotoga")
+
+NOBspira_AAW <- amp_timeseries(d_AAW_N.spira,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 1,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOBspira_AAW
+
+
+NOBspira_VIB <- amp_timeseries(d_VIB_N.spira,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 1,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Viby")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOBspira_VIB
+NOBspira_combo <- ggarrange(NOBspira_AAW, NOBspira_VIB, nrow=1,common.legend = TRUE, legend="bottom")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/NOBspira_combo.png")
+ggsave(plotName, width = 8, height = 4)
+
+NOBsomonas_VIB <- amp_timeseries(d_VIB_N.somonas,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Nitrosomonas spp: Viby")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOBsomonas_VIB
+
+
+NOBsomonas_AAW <- amp_timeseries(d_AAW_N.somonas,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Nitrosomonas spp: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+
+
+NOBsomonas_AAW
+NOBsomonas_combo <- ggarrange(NOBsomonas_AAW, NOBsomonas_VIB, common.legend = TRUE, legend="bottom", nrow = 2)
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/NOBsomonas_combo.png")
+ggsave(plotName, width = 9, height = 12)
+
+
+
+NOBtoga_VIB <- amp_timeseries(d_VIB_N.toga,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Nitrotoga spp: Viby")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOBtoga_VIB
+
+
+NOBtoga_AAW <- amp_timeseries(d_AAW_N.toga,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+ggtitle("Nitrotoga spp: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+NOBtoga_AAW
+NOBtoga_combo <- ggarrange(NOBtoga_AAW,  NOBtoga_VIB, heights=c(1,1.2), ncol = 2, common.legend = TRUE, legend="bottom")
+NOBtoga_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/NOBtoga_combo.png")
+ggsave(plotName, width = 12, height = 4)
+
+
+
+
+```
+
+
+```{r}
+
+Fila_AAW <- amp_timeseries(amp_subset_samples(d_Fila_AAW, !Line == c("HC-O","HC-U")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 12,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Filamentous genera: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size=18)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_AAW
+
+
+
+Fila_VIB <- amp_timeseries(amp_subset_samples(d_Fila_VIB, !Line == c("HC-O","HC-U")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 12,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Filamentous genera: Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size=18)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+
+Fila_VIB
+
+
+Fila_combo <- ggarrange(Fila_AAW,Fila_VIB, common.legend = TRUE, legend = "bottom", 
+                        nrow=2, heights = c(2,2) )
+Fila_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/Fila_combo.png")
+ggsave(plotName, width = 12.5, height = 16)
+
+
+
+d_Fila_AAW_Micro <- amp_subset_taxa(d_AAW,
+  tax_vector = "g__Ca_Microthrix")
+d_Fila_VIB_Micro <- amp_subset_taxa(d_VIB,
+  tax_vector = "g__Ca_Microthrix")
+d_Fila_SKA_Micro <- amp_subset_taxa(d_SKA,
+  tax_vector = "g__Ca_Microthrix")
+
+Fila_VIB_Micro <- amp_timeseries(amp_subset_samples(d_Fila_VIB_Micro, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 2,
+  tax_aggregate = "Species",
+  #tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_VIB_Micro
+
+
+Fila_AAW_Micro <- amp_timeseries(amp_subset_samples(d_Fila_AAW_Micro, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 2,
+  tax_aggregate = "Species",
+  #tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Aalborg West")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_AAW_Micro
+
+Fila_Micro_combo <- ggarrange(Fila_AAW_Micro,Fila_VIB_Micro, common.legend = TRUE, legend = "bottom", 
+                        nrow=1, align="h" )
+Fila_Micro_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/Fila_Micro_combo.png")
+ggsave(plotName, width = 12, height = 4)
+
+
+
+
+```
+
+```{r}
+
+PAO_AAW <- amp_timeseries(d_PAO_AAW,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("PAO genera: Aalborg West")+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+PAO_AAW
+
+PAO_VIB <- amp_timeseries(d_PAO_VIB,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("PAO genera: Viby")+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+PAO_VIB
+
+PAOs_combo <-ggarrange(PAO_AAW,PAO_VIB, nrow=2, heights=c(1,1.2), common.legend = TRUE, legend = "bottom", align="v")
+
+PAOs_combo 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/PAO_combo.png")
+ggsave(plotName, width = 8, height = 12)
+
+
+d_AAW_Tetra <- amp_subset_taxa(d_AAW,
+  tax_vector = "g__Tetrasphaera")
+d_VIB_Tetra <- amp_subset_taxa(d_VIB,
+  tax_vector = "g__Tetrasphaera")
+  
+Tetra_AAW <- amp_timeseries(amp_subset_samples(d_AAW_Tetra, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+ggtitle("Tetrasphaera spp., Aalborg West")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+  Tetra_AAW
+  
+  Tetra_VIB <- amp_timeseries(amp_subset_samples(d_VIB_Tetra, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+ggtitle("Tetrasphaera spp., Viby")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+  Tetra_VIB
+Tetra_combo <- (Tetra_AAW+Tetra_VIB)+ 
+  plot_layout(nrow=2,heights = c( 1,1),guides = "collect") & theme(legend.position = 'bottom')
+Tetra_combo 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/Tetra_combo.png")
+ggsave(plotName, width = 10, height = 13)
+
+d_AAW_Dechloro <- amp_subset_taxa(d_AAW,
+  tax_vector = "g__Dechloromonas")
+d_VIB_Dechloro <- amp_subset_taxa(d_VIB,
+  tax_vector = "g__Dechloromonas")
+d_VIB_Dechloro <- amp_subset_taxa(d_VIB_Dechloro,
+  tax_vector = "s__midas_s_10989", remove=TRUE)
+
+Dechloro_AAW <- amp_timeseries(amp_subset_samples(d_AAW_Dechloro, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+ggtitle("Dechloromonas spp., Aalborg West")+
+  theme(legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.y =element_text(size = 13),
+        axis.text.x = element_blank(),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) +
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Dechloro_AAW
+
+Dechloro_VIB <- amp_timeseries(amp_subset_samples(d_VIB_Dechloro, Line == c("Before treatment","After start of treatment")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 3,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.y =element_text(size = 13),
+        axis.text.x = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) +ggtitle("Dechloromonas spp., Viby")+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Dechloro_VIB
+
+Dechloro_combo <- (Dechloro_AAW+Dechloro_VIB)+ 
+  plot_layout(nrow=2,heights = c( 1,1.1),guides = "collect") & theme(legend.position = 'bottom')
+Dechloro_combo 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/Dechloro_combo.png")
+ggsave(plotName, width = 11, height = 8)
+
+```
+
+
+```{r}
+d_VIB_filt <- filter_otus(d_VIB, filter_otus = 0.2)
+d_Fila_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = Filaments)
+s_Fila_VIB <- aggregate_abund(
+  d_Fila_VIB$abund,
+  d_Fila_VIB$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_Fila_VIB <- s_Fila_VIB[order(s_Fila_VIB$Display,decreasing=TRUE),]
+s_Fila_VIB <- merge(s_Fila_VIB, d_Fila_VIB$metadata, by="Sample")
+
+d_AAW_filt <- filter_otus(d_AAW, filter_otus = 0.2)
+d_Fila_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = Filaments)
+s_Fila_AAW <- aggregate_abund(
+  d_Fila_AAW$abund,
+  d_Fila_AAW$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_Fila_AAW <- s_Fila_AAW[order(s_Fila_AAW$Display,decreasing=TRUE),]
+s_Fila_AAW <- merge(s_Fila_AAW, d_Fila_AAW$metadata, by="Sample")
+
+d_SKA_filt <- filter_otus(d_SKA, filter_otus = 0.2)
+d_Fila_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = Filaments)
+s_Fila_SKA <- aggregate_abund(
+  d_Fila_SKA$abund,
+  d_Fila_SKA$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_Fila_SKA <- s_Fila_SKA[order(s_Fila_SKA$Display,decreasing=TRUE),]
+s_Fila_SKA <- merge(s_Fila_SKA, d_Fila_SKA$metadata, by="Sample")
+
+
+d_PAO_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = PAO)
+s_PAO_VIB <- aggregate_abund(
+  d_PAO_VIB$abund,
+  d_PAO_VIB$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_PAO_VIB <- s_PAO_VIB[order(s_PAO_VIB$Display,decreasing=TRUE),]
+s_PAO_VIB <- merge(s_PAO_VIB, d_PAO_VIB$metadata, by="Sample")
+
+d_PAO_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = PAO)
+s_PAO_AAW <- aggregate_abund(
+  d_PAO_AAW$abund,
+  d_PAO_AAW$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_PAO_AAW <- s_PAO_AAW[order(s_PAO_AAW$Display,decreasing=TRUE),]
+s_PAO_AAW <- merge(s_PAO_AAW, d_PAO_AAW$metadata, by="Sample")
+
+d_PAO_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = PAO)
+s_PAO_SKA <- aggregate_abund(
+  d_PAO_SKA$abund,
+  d_PAO_SKA$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_PAO_SKA <- s_PAO_SKA[order(s_PAO_SKA$Display,decreasing=TRUE),]
+s_PAO_SKA <- merge(s_PAO_SKA, d_PAO_SKA$metadata, by="Sample")
+
+
+d_GAO_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = GAO)
+s_GAO_VIB <- aggregate_abund(
+  d_GAO_VIB$abund,
+  d_GAO_VIB$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_GAO_VIB <- s_GAO_VIB[order(s_GAO_VIB$Display,decreasing=TRUE),]
+s_GAO_VIB <- merge(s_GAO_VIB, d_GAO_VIB$metadata, by="Sample")
+
+d_GAO_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = GAO)
+s_GAO_AAW <- aggregate_abund(
+  d_GAO_AAW$abund,
+  d_GAO_AAW$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_GAO_AAW <- s_GAO_AAW[order(s_GAO_AAW$Display,decreasing=TRUE),]
+s_GAO_AAW <- merge(s_GAO_AAW, d_GAO_AAW$metadata, by="Sample")
+
+d_GAO_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = GAO)
+s_GAO_SKA <- aggregate_abund(
+  d_GAO_SKA$abund,
+  d_GAO_SKA$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_GAO_SKA <- s_GAO_SKA[order(s_GAO_SKA$Display,decreasing=TRUE),]
+s_GAO_SKA <- merge(s_GAO_SKA, d_GAO_SKA$metadata, by="Sample")
+
+
+
+
+d_NOB_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = NOB_AOB)
+s_NOB_VIB <- aggregate_abund(
+  d_NOB_VIB$abund,
+  d_NOB_VIB$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_NOB_VIB <- s_NOB_VIB[order(s_NOB_VIB$Display,decreasing=TRUE),]
+s_NOB_VIB <- merge(s_NOB_VIB, d_NOB_VIB$metadata, by="Sample")
+
+d_NOB_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = NOB_AOB)
+s_NOB_AAW <- aggregate_abund(
+  d_NOB_AAW$abund,
+  d_NOB_AAW$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_NOB_AAW <- s_NOB_AAW[order(s_NOB_AAW$Display,decreasing=TRUE),]
+s_NOB_AAW <- merge(s_NOB_AAW, d_NOB_AAW$metadata, by="Sample")
+
+d_NOB_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = NOB_AOB)
+s_NOB_SKA <- aggregate_abund(
+  d_NOB_SKA$abund,
+  d_NOB_SKA$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+s_NOB_SKA <- s_NOB_SKA[order(s_NOB_SKA$Display,decreasing=TRUE),]
+s_NOB_SKA <- merge(s_NOB_SKA, d_NOB_SKA$metadata, by="Sample")
+
+
+
+
+
+```
+
+
+
+```{r}
+VIB_Fila <- ggplot(s_Fila_VIB)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y")+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Viby")+
+  theme( axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+AAW_Fila <- ggplot(s_Fila_AAW)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y")+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Aalborg West")+
+  theme(axis.title.x = element_blank())
+SKA_Fila <- ggplot(s_Fila_SKA)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y")+ 
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Skansverket")+
+  theme(axis.title.y = element_blank())
+ggarrange(VIB_Fila,AAW_Fila,SKA_Fila, nrow=3, common.legend = TRUE, legend="bottom" , align="v")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_Fila_combo.png")
+ggsave(plotName, width = 11, height = 15)
+```
+```{r}
+VIB_PAO <- ggplot(s_PAO_VIB)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Viby")+
+  theme( axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+AAW_PAO <- ggplot(s_PAO_AAW)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Aalborg West")+
+  theme(axis.title.x = element_blank())
+SKA_PAO <- ggplot(s_PAO_SKA)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Skansverket")+
+  theme(axis.title.y = element_blank())
+ggarrange(VIB_PAO,AAW_PAO,SKA_PAO, nrow=3, common.legend = TRUE, legend="bottom" , align="v")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_PAO_combo.png")
+ggsave(plotName, width = 11, height = 15)
+```
+
+
+```{r}
+VIB_GAO <- ggplot(s_GAO_VIB)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Viby")+
+  theme( axis.title.x = element_blank())
+AAW_GAO <- ggplot(s_GAO_AAW)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Aalborg West")+
+  theme(axis.title.x = element_blank())
+SKA_GAO <- ggplot(s_GAO_SKA)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Skansverket")+
+  theme(axis.title.y = element_blank())
+ggarrange(ggarrange(VIB_GAO, ncol=2, widths = c(3.5,1.6), legend = "none"),AAW_GAO, nrow=2, heights= c(1.2,2), common.legend = TRUE, legend="bottom" , align="v")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_GAO_combo.png")
+ggsave(plotName, width = 10, height = 8)
+```
+
+
+```{r}
+VIB_NOB <- ggplot(s_NOB_VIB)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Viby")+
+  theme( axis.title.x = element_blank(),
+          axis.title.y = element_blank())
+AAW_NOB <- ggplot(s_NOB_AAW)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Aalborg West")+
+  theme(axis.title.x = element_blank())
+SKA_NOB <- ggplot(s_NOB_SKA)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Skansverket")+
+  theme(axis.title.y = element_blank())
+ggarrange(VIB_NOB,AAW_NOB,SKA_NOB, nrow=3, heights= c(2,2,2), common.legend = TRUE, legend="bottom" , align="v")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_NOB_combo.png")
+ggsave(plotName, width = 10, height = 9)
+```
+
+```{r}
+
+d_VIB_filt <- filter_otus(d_VIB, filter_otus = 1)
+d_others_VIB <- amp_subset_taxa(amp_subset_samples(d_VIB_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+s_others_VIB <- aggregate_abund(
+  d_others_VIB$abund,
+  d_others_VIB$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+s_others_VIB <- s_others_VIB[order(s_others_VIB$Display,decreasing=TRUE),]
+s_others_VIB <- merge(s_others_VIB, d_others_VIB$metadata, by="Sample")
+
+d_AAW_filt <- filter_otus(d_AAW, filter_otus = 1)
+d_others_AAW <- amp_subset_taxa(amp_subset_samples(d_AAW_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+s_others_AAW <- aggregate_abund(
+  d_others_AAW$abund,
+  d_others_AAW$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+s_others_AAW <- s_others_AAW[order(s_others_AAW$Display,decreasing=TRUE),]
+s_others_AAW <- merge(s_others_AAW, d_others_AAW$metadata, by="Sample")
+d_SKA_filt <- filter_otus(d_SKA, filter_otus = 1)
+d_others_SKA <- amp_subset_taxa(amp_subset_samples(d_SKA_filt, Line== c("HC-O", "HC-U") ),
+  tax_vector = c(GAO,PAO,NOB_AOB,Filaments), remove = TRUE)
+s_others_SKA <- aggregate_abund(
+  d_others_SKA$abund,
+  d_others_SKA$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "long"
+)
+s_others_SKA <- s_others_SKA[order(s_others_SKA$Display,decreasing=TRUE),]
+s_others_SKA <- merge(s_others_SKA, d_others_SKA$metadata, by="Sample")
+
+#genus <- c(intersect(s_others_AAW$Display, s_others_VIB$Display))
+#genus <- intersect(genus, s_others_SKA$Display)
+#s_others_SKA <- subset(s_others_SKA, Display %in% genus)
+#s_others_AAW <- subset(s_others_AAW, Display %in% genus)
+#s_others_VIB <- subset(s_others_VIB, Display %in% genus)
+
+VIB_others <- ggplot(s_others_VIB)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Viby")+
+  theme( axis.title.x = element_blank(),
+          axis.title.y = element_blank())
+VIB_others
+AAW_others <- ggplot(s_others_AAW)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="2 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Aalborg West")+
+  theme(axis.title.x = element_blank())
+AAW_others
+SKA_others <- ggplot(s_others_SKA)+
+  geom_line(mapping=aes(x=Date, y=Sum, color=Line))+
+  facet_wrap(~Display, scales="free_y", ncol=3)+ 
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d",guide = guide_axis(angle = 90))+
+  labs(y="Read Abundance[%]", title="Skansverket")+
+  theme(axis.title.y = element_blank())
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_others_SKA.png")
+SKA_others
+ggsave(plotName, width = 8, height = 6)
+
+ggarrange(AAW_others,VIB_others, nrow=2, heights= c(2,2), common.legend = TRUE, legend="bottom" , align="v")
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC_others_combo.png")
+ggsave(plotName, width = 8, height = 11)
+```
+
+
+
+
+
+
+
+```{r}
+
+Fila_AAW <- amp_timeseries(amp_subset_samples(d_Fila_AAW, Line == c("HC-O","HC-U")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 12,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Filamentous genera: Aalborg West")+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size=18)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_AAW
+
+
+
+Fila_VIB <- amp_timeseries(amp_subset_samples(d_Fila_VIB, Line == c("HC-O","HC-U")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 12,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Filamentous genera: Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13),
+        plot.title = element_text(size=18)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+
+Fila_VIB
+
+
+Fila_combo <- ggarrange(Fila_AAW,Fila_VIB, common.legend = TRUE, legend = "bottom", 
+                        nrow=2, heights = c(2,2) )
+Fila_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC-Fila_combo.png")
+ggsave(plotName, width = 12.5, height = 16)
+
+
+
+d_Fila_AAW_Micro <- amp_subset_taxa(d_AAW,
+  tax_vector = "g__Ca_Microthrix")
+d_Fila_VIB_Micro <- amp_subset_taxa(d_VIB,
+  tax_vector = "g__Ca_Microthrix")
+d_Fila_SKA_Micro <- amp_subset_taxa(d_SKA,
+  tax_vector = "g__Ca_Microthrix")
+
+Fila_VIB_Micro <- amp_timeseries(amp_subset_samples(d_Fila_VIB_Micro, Line == c("HC-U","HC-O")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 2,
+  tax_aggregate = "Species",
+  #tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Viby")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_VIB_Micro
+
+
+Fila_AAW_Micro <- amp_timeseries(amp_subset_samples(d_Fila_AAW_Micro, Line == c("HC-U","HC-O")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  #sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 2,
+  tax_aggregate = "Species",
+  #tax_add = "Phylum",
+  normalise = FALSE
+)+ggtitle("Aalborg West")+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+Fila_AAW_Micro
+
+Fila_Micro_combo <- ggarrange(Fila_AAW_Micro,Fila_VIB_Micro, common.legend = TRUE, legend = "bottom", 
+                        nrow=1, align="h" )
+Fila_Micro_combo
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC-Fila_Micro_combo.png")
+ggsave(plotName, width = 12, height = 4)
+
+
+
+
+```
+
+```{r}
+
+PAO_AAW <- amp_timeseries(d_PAO_AAW,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("PAO genera: Aalborg West")+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+PAO_AAW
+
+PAO_VIB <- amp_timeseries(d_PAO_VIB,
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 4,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  normalise = FALSE
+)+
+     geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        ) + ggtitle("PAO genera: Viby")+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+PAO_VIB
+
+PAOs_combo <-ggarrange(PAO_AAW,PAO_VIB, nrow=2, heights=c(1,1.2), common.legend = TRUE, legend = "bottom", align="v")
+
+PAOs_combo 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC-PAO_combo.png")
+ggsave(plotName, width = 8, height = 12)
+
+
+d_AAW_Tetra <- amp_subset_taxa(d_AAW,
+  tax_vector = "g__Tetrasphaera")
+d_VIB_Tetra <- amp_subset_taxa(d_VIB,
+  tax_vector = "g__Tetrasphaera")
+  
+Tetra_AAW <- amp_timeseries(amp_subset_samples(d_AAW_Tetra, Line == c("HC-U","HC-O")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-11-01"))),
+                linetype=2, colour="gray38")+ggtitle("Tetrasphaera spp., Aalborg West")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+  Tetra_AAW
+  
+  Tetra_VIB <- amp_timeseries(amp_subset_samples(d_VIB_Tetra, Line == c("HC-U","HC-O")),
+  time_variable = "Date",
+  group_by = "Line",
+  split = TRUE,
+  sample_shape_by = "Line",
+  scales = "free_y",
+  tax_show = 6,
+  tax_aggregate = "Species",
+  #tax_add = "Genus",
+  normalise = FALSE
+)+
+  geom_vline(aes(xintercept=as.numeric(as.Date("2019-10-23"))),
+                linetype=2, colour="gray38")+ggtitle("Tetrasphaera spp., Viby")+
+  theme( legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.title = element_text(size=13), #change legend title font size
+        legend.text = element_text(size=13),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13),
+        strip.text.x = element_text(size = 13)
+        )+
+  scale_color_manual("", values = dd.col)+
+  scale_x_date(date_breaks="3 month",date_labels = "%Y-%m-%d")
+  Tetra_VIB
+Tetra_combo <- (Tetra_AAW+Tetra_VIB)+ 
+  plot_layout(nrow=2,heights = c( 1,1),guides = "collect") & theme(legend.position = 'bottom')
+Tetra_combo 
+plotName <- paste( "D://Speciale/Data/Hydrocycloner/HC-Tetra_combo.png")
+ggsave(plotName, width = 10, height = 13)
+
+```
+
+
+
+```{r}
+d_VIB_HCO <- amp_subset_samples(d_VIB, Line %in% "HC-O")
+d_VIB_HCU <- amp_subset_samples(d_VIB, Line %in% "HC-U")
+
+t.test(d_VIB_HCO$abund,d_VIB_HCU$abund)
+#p-value 0.28 indicating no significant difference between samples
+```
+
+
+```{r}
+
+
+
+d_AAW_HCO_2019.04 <- amp_subset_samples(d_AAW, Line %in% "HC-O" & Quarter =="2019/04")
+d_AAW_HCU_2019.04  <- amp_subset_samples(d_AAW, Line %in% "HC-U"& Quarter =="2019/04")
+d_AAW_HCO_2020.01 <- amp_subset_samples(d_AAW, Line %in% "HC-O" & Quarter =="2020/01")
+d_AAW_HCU_2020.01  <- amp_subset_samples(d_AAW, Line %in% "HC-U"& Quarter =="2020/01")
+d_AAW_HCO_2020.02 <- amp_subset_samples(d_AAW, Line %in% "HC-O" & Quarter =="2020/02")
+d_AAW_HCU_2020.02  <- amp_subset_samples(d_AAW, Line %in% "HC-U"& Quarter =="2020/02")
+d_AAW_HCO_2020.03 <- amp_subset_samples(d_AAW, Line %in% "HC-O" & Quarter =="2020/03")
+d_AAW_HCU_2020.03  <- amp_subset_samples(d_AAW, Line %in% "HC-U"& Quarter =="2020/03")
+d_AAW_HCO_2020.04 <- amp_subset_samples(d_AAW, Line %in% "HC-O" & Quarter =="2020/04")
+d_AAW_HCU_2020.04  <- amp_subset_samples(d_AAW, Line %in% "HC-U"& Quarter =="2020/04")
+
+
+ttest_2019.04 <- t.test(d_AAW_HCO_2019.04$abund,d_AAW_HCU_2019.04$abund)
+ttest_2020.01 <- t.test(d_AAW_HCO_2020.01$abund,d_AAW_HCU_2020.01$abund)
+ttest_2020.02 <- t.test(d_AAW_HCO_2020.02$abund,d_AAW_HCU_2020.02$abund)
+ttest_2020.03 <- t.test(d_AAW_HCO_2020.03$abund,d_AAW_HCU_2020.03$abund)
+ttest_2020.04 <- t.test(d_AAW_HCO_2020.04$abund,d_AAW_HCU_2020.04$abund)
+
+```
+
+
+
+
+```{r}
+d_SKA_HCO <- amp_subset_samples(d_SKA, Line %in% "HC-O")
+d_SKA_HCU <- amp_subset_samples(d_SKA, Line %in% "HC-U")
+d_SKA_AS <- amp_subset_samples(d_SKA, Line %in% "After start of treatment")
+
+
+t.test(d_SKA_HCO$abund,d_SKA_HCU$abund)
+#p-value er 0.37, så vi bekræfter nul-hypotesen at gennemsnittet af de to prøver er ens og forkaster den alternative hypotese at de er forskellige. Dvs. prøverne er ens.
+
+
+```
+
+```{r}
+d_SKA <- amp_load(otutable = "D://Speciale/Data/Hydrocycloner/biobank_SKA_03ddc1a9083f7e29e453ab20d6e620b9.csv",
+              metadata = "D://Speciale/Data/Hydrocycloner/metadata.csv")
+
+d_SKA$metadata <- d_SKA$metadata[,-4]
+d_SKA$metadata <- d_SKA$metadata[,-4]
+d_SKA$metadata <- d_SKA$metadata[,-7]
+d_SKA$metadata$Date <- as.Date(d_SKA$metadata$Date, format="%d-%m-%Y")
+d_SKA$metadata$Line[d_SKA$metadata$Line== "AS"] <- "After start of treatment"
+
+d_SKA_HCO <- amp_subset_samples(d_SKA, Line %in% "HC-O")
+d_SKA_HCU <- amp_subset_samples(d_SKA, Line %in% "HC-U")
+
+df1 <- d_SKA_HCO$abund
+df2 <- d_SKA_HCU$abund
+df1 <-df1 %>%  rownames_to_column("ASV")
+df2 <-df2 %>%  rownames_to_column("ASV")
+df <- merge(df1, df2, by="ASV", all=TRUE)
+df <- df %>% column_to_rownames("ASV")
+df1 <- df[,names(df) %in% names(d_SKA_HCO$abund)]
+df2 <- df[,names(df) %in% names(d_SKA_HCU$abund)]
+
+#df <- merge(df1, df2, by=ASVintersect, all=TRUE)
+df3 <- rbind(d_SKA_HCU$metadata, d_SKA_HCO$metadata)
+df3$Date <- as.character(df3$Date)
+
+
+
+# Reorder columns in df1 and df2 to match the order of Sample values
+df1 <- df1[, order(names(df1) %in% df3$Sample)]
+df2 <- df2[, order(names(df2) %in% df3$Sample)]
+
+# Identify unique values in "Date" column of df3
+unique_dates <- unique(df3$Date)
+
+# Initialize empty list to store t-test results by date
+t_test_results_by_date <- list()
+
+# Loop over each unique date
+for(date in unique_dates){
+  # Select rows in df3 where Date matches the current unique value
+  subset_df3 <- subset(df3, Date == date)
+ 
+  # Extract the corresponding Sample values
+  sample_values <- subset_df3$Sample
+  
+  # Reorder columns in df1 and df2 to match the order of Sample values
+  df1_subset <- df1[,names(df1) %in% sample_values]
+  df2_subset <- df2[,names(df2) %in% sample_values]
+  
+  # Check if either df1_subset or df2_subset has zero columns
+  if(is.null(df1_subset) == TRUE || is.null(df2_subset) == TRUE) {
+    message(paste("Skipping t-test calculation for date", date, "due to missing data"))
+    next
+  }
+  
+  # Perform t-test on selected columns
+  t_test_result <- t.test(df1_subset, df2_subset)
+
+  # Add t-test result to list, using the date as the list index
+  t_test_results_by_date[[date]] <- t_test_result
+}
+
+# Print t-test results for each date
+for(date in unique_dates){
+  if(is.null(t_test_results_by_date[[date]])) {
+    message(paste("No t-test result found for date", date))
+  } else {
+    print(paste("T-test results for date", date))
+    print(t_test_results_by_date[[date]])
+  }}
+
+anyDiff <- any(t_test_results_by_date$df$p.value <= 0.05)
+
+```
+
+
+```{r}
+d_VIB <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_VIB_12d03cc6d874a70286231350637684a9.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_VIB_metadata.csv"
+)
+d_VIB <- amp_subset_samples(
+  d_VIB,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+#clean up tables
+d_VIB$metadata <- d_VIB$metadata[2:11]
+d_VIB$metadata <- d_VIB$metadata[,-7]
+d_VIB$metadata$Line[d_VIB$metadata$Line== ""] <- "After start of treatment"
+d_VIB$metadata$Line[d_VIB$metadata$Line== "LT"] <- "Before treatment"
+d_VIB_sub <- amp_subset_samples(d_VIB, d_VIB$metadata$Year >= 2020 & d_VIB$metadata$Line =="Before treatment" )
+d_VIB <- amp_subset_samples(d_VIB, !Sample %in% d_VIB_sub$metadata$Sample)
+d_VIB$metadata$Date <- as.Date(d_VIB$metadata$Date, format="%Y-%m-%d")
+d_VIB <- filter_otus(d_VIB, filter_otus = 0.1)
+
+
+#subset to overlfow and underflow
+d_VIB_HCO <- amp_subset_samples(d_VIB, Line %in% "HC-O")
+d_VIB_HCU <- amp_subset_samples(d_VIB, Line %in% "HC-U")
+
+#ensure same rownames in df1 and df2
+df1 <- d_VIB_HCO$abund
+df2 <- d_VIB_HCU$abund
+df1 <-df1 %>%  rownames_to_column("ASV")
+df2 <-df2 %>%  rownames_to_column("ASV")
+df <- merge(df1, df2, by="ASV", all=TRUE)
+df <- df %>% column_to_rownames("ASV")
+df1 <- df[,names(df) %in% names(d_VIB_HCO$abund)]
+df2 <- df[,names(df) %in% names(d_VIB_HCU$abund)]
+
+ttestVIB <- t.test(df1,df2)
+#df1 <- t(df1)
+#df2 <- t(df2)
+#ttestVIB2 <- t.test(df1,df2)
+
+#make df w. samples and dates
+df3 <- rbind(d_VIB_HCU$metadata, d_VIB_HCO$metadata)
+df3$Date <- as.character(df3$Date)
+
+
+
+# Reorder columns in df1 and df2 to match the order of Sample values in df3
+df1 <- df1[, order(names(df1) %in% df3$Sample)]
+df2 <- df2[, order(names(df2) %in% df3$Sample)]
+
+# Identify unique values in "Date" column of df3
+unique_dates <- unique(df3$Date)
+
+# Initialize empty list to store t-test results by date
+t_test_results_by_date <- list()
+
+# Loop over each unique date
+for(date in unique_dates){
+  # Select rows in df3 where Date matches the current unique value
+  subset_df3 <- subset(df3, Date == date)
+ 
+  # Extract the corresponding Sample values
+  sample_values <- subset_df3$Sample
+  
+  # Reorder columns in df1 and df2 to match the order of Sample values
+  df1_subset <- df1[,names(df1) %in% sample_values]
+  df2_subset <- df2[,names(df2) %in% sample_values]
+  
+  df1_subset[is.na(df1_subset)] <- 0
+  df2_subset[is.na(df2_subset)] <- 0
+  
+  # Check if either df1_subset or df2_subset has zero columns or missing values
+  if(length(df1_subset) == 0 || length(df2_subset) == 0 || anyNA(df1_subset) || anyNA(df2_subset)) {
+    message(paste("Skipping t-test calculation for date", date, "due to missing data"))
+    next
+  }
+  # Perform t-test on selected columns
+  t_test_result <- t.test(df1_subset, df2_subset)
+
+  # Add t-test result to list, using the date as the list index
+  t_test_results_by_date[[date]] <- t_test_result
+}
+
+# Print t-test results for each date
+for(date in unique_dates){
+  if(is.null(t_test_results_by_date[[date]])) {
+    message(paste("No t-test result found for date", date))
+  } else {
+    print(paste("T-test results for date", date))
+    print(t_test_results_by_date[[date]])
+  }}
+
+anyDiff <- any(t_test_results_by_date$df$p.value <= 0.05)
+```
+
+
+
+
+```{r}
+d_AAW <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_AAW_2448c73144695bd8292108ed800651e5.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_AAW_metadata.xlsx"
+)
+d_AAW$metadata$Date <- as.Date(d_AAW$metadata$Date, format = "%Y-%m-%d" )
+d_AAW <- amp_subset_samples(
+  d_AAW,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+
+
+d_AAW$metadata <- d_AAW$metadata[1:10]
+d_AAW$metadata <-d_AAW$metadata[,-7]
+d_AAW$metadata$Line[is.na(d_AAW$metadata$Line)] <- "After start of treatment"
+d_AAW$metadata$Line[d_AAW$metadata$Line== "S::Select"] <- "After start of treatment"
+d_AAW$metadata$Line[d_AAW$metadata$Line== "pre-S::Select"] <- "Before treatment"
+d_AAW$metadata$Date <- as.Date(d_AAW$metadata$Date, format="%Y-%m-%d")
+d_AAW$metadata$Plant[d_AAW$metadata$Plant=="Aalborg W"] <- "Aalborg West"
+d_AAW <- filter_otus(d_AAW, filter_otus = 0.1)
+
+#subset to overlfow and underflow
+d_AAW_HCO <- amp_subset_samples(d_AAW, Line %in% "HC-O")
+d_AAW_HCU <- amp_subset_samples(d_AAW, Line %in% "HC-U")
+
+#ensure same rownames in df1 and df2
+df1 <- d_AAW_HCO$abund
+df2 <- d_AAW_HCU$abund
+df1 <-df1 %>%  rownames_to_column("ASV")
+df2 <-df2 %>%  rownames_to_column("ASV")
+df <- merge(df1, df2, by="ASV", all=TRUE)
+df <- df %>% column_to_rownames("ASV")
+df1 <- df[,names(df) %in% names(d_AAW_HCO$abund)]
+df2 <- df[,names(df) %in% names(d_AAW_HCU$abund)]
+
+ttestAAW <- t.test(df1,df2)
+#df1 <- t(df1)
+#df2 <- t(df2)
+#ttestAAW2 <- t.test(df1,df2)
+
+#make df w. samples and dates
+df3 <- rbind(d_AAW_HCU$metadata, d_AAW_HCO$metadata)
+df3$Date <- as.character(df3$Date)
+
+
+
+# Reorder columns in df1 and df2 to match the order of Sample values in df3
+df1 <- df1[, order(names(df1) %in% df3$Sample)]
+df2 <- df2[, order(names(df2) %in% df3$Sample)]
+
+# Identify unique values in "Date" column of df3
+unique_dates <- unique(df3$Date)
+
+# Initialize empty list to store t-test results by date
+t_test_results_by_date <- list()
+
+
+# Loop over each unique date
+for(date in unique_dates){
+  # Select rows in df3 where Date matches the current unique value
+  subset_df3 <- subset(df3, Date == date)
+ 
+  # Extract the corresponding Sample values
+  sample_values <- subset_df3$Sample
+  
+  # Reorder columns in df1 and df2 to match the order of Sample values
+  df1_subset <- df1[,names(df1) %in% sample_values]
+  df2_subset <- df2[,names(df2) %in% sample_values]
+  
+  df1_subset[is.na(df1_subset)] <- 0
+  df2_subset[is.na(df2_subset)] <- 0
+  
+  # Check if either df1_subset or df2_subset has zero columns or missing values
+  if(length(df1_subset) == 0 || length(df2_subset) == 0 ) {
+    message(paste("Skipping t-test calculation for date", date, "due to missing data"))
+    next
+  }
+  # Perform t-test on selected columns
+  t_test_result <- t.test(df1_subset, df2_subset)
+
+  # Add t-test result to list, using the date as the list index
+  t_test_results_by_date[[date]] <- t_test_result
+}
+
+
+anyDiff <- any(t_test_results_by_date$df$p.value <= 0.05)
+```
+
+
+
+

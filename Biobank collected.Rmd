@@ -1,0 +1,2020 @@
+---
+title: "Biobank gathered"
+author: "Vibeke S. Nielsen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+path_out<- "D://Speciale/Data/Extra data/"
+```
+
+```{r}
+# Load packages
+library(ampvis2)
+library(data.table)
+library(doParallel)
+library(tidyverse)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(grid)
+library(gridExtra)
+library(png)
+library(dplyr)
+library(stringr)
+library(scales)
+library(tidyr)
+library(tidyverse)
+library(knitr)
+library(reshape2)
+library(readxl)
+library("lubridate")
+library("ggpp")
+library("ggpmisc")
+install.packages("ggpubr")
+library("ggpubr")
+library("purrr")
+library(stats)
+
+```
+
+```{r}
+# defining seasons
+spring <- data.frame(xstart=as.Date(c("2016-03-01","2017-03-01","2018-03-01","2019-03-01","2020-03-01","2021-03-01","2022-03-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2016-05-31","2017-05-31","2018-05-31","2019-05-31","2020-05-31","2021-05-31","2022-05-31"),format = c("%Y-%m-%d")))
+summer <- data.frame(xstart=as.Date(c("2016-06-01","2017-06-01","2018-06-01","2019-06-01","2020-06-01","2021-06-01","2022-06-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2016-08-31","2017-08-31","2018-08-31","2019-08-31","2020-08-31","2021-08-31","2022-08-31"),format = c("%Y-%m-%d")))
+fall <- data.frame(xstart=as.Date(c("2016-09-01","2017-09-01","2018-09-01","2019-09-01","2020-09-01","2021-09-01","2022-09-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2016-11-30","2017-11-30","2018-11-30","2019-11-30","2020-11-30","2021-11-30","2022-11-30"),format = c("%Y-%m-%d")))
+winter <- data.frame(xstart=as.Date(c("2016-01-01","2017-01-01","2018-01-01","2019-01-01","2020-01-01","2021-01-01","2022-01-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2016-02-31","2017-02-31","2018-02-31","2019-02-31","2020-02-31","2021-02-31","2022-02-31"),format = c("%Y-%m-%d")))
+```
+
+```{r}
+#Indlæs DSVI data
+
+AAE_DSVI_2016<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2016", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2017<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2017", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2018<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2018", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2019<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2019", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2020<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2020", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2021<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2021", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_2022<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg øst.xlsx", sheet = "2022", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAE_DSVI_list <-  list(AAE_DSVI_2016, AAE_DSVI_2017, AAE_DSVI_2018, AAE_DSVI_2019, AAE_DSVI_2020, AAE_DSVI_2021, AAE_DSVI_2022)
+AAE_DSVI <- do.call(rbind, AAE_DSVI_list)
+AAE_DSVI$DSVI[is.na(AAE_DSVI$DSVI)] <- AAE_DSVI$SVI[is.na(AAE_DSVI$DSVI)]
+AAE_DSVI$Date <- as.Date(AAE_DSVI$Date, format = "%d. %B-%Y" )
+AAE_DSVI <- AAE_DSVI[,c("Date", "SS", "SVI", "DSVI")]
+AAE_DSVI$Plant  <- "Aalborg East"
+
+DAM_DSVI<- read_excel( "D://Speciale/Data/Extra data/2017-2023 DSVI Damhusåen.xlsx", sheet = "Line A", col_types = c("date", "numeric", "numeric", "numeric", "numeric", "numeric"))
+DAM_DSVI$Line <- "A"
+DAM_DSVI$Dato <- as.Date(DAM_DSVI$Dato, format = "%Y-%m-%d" )
+DAM_DSVI$SVI <- NA
+names(DAM_DSVI)[3] <- "DSVI"
+names(DAM_DSVI)[1] <- "Date"
+DAM_DSVI <- DAM_DSVI[,c("Date", "SS", "SVI", "DSVI")]
+DAM_DSVI <- DAM_DSVI[!is.na(DAM_DSVI$DSVI),]
+DAM_DSVI$Plant  <- "Damhusåen"
+DAM_DSVI$SS <- DAM_DSVI$SS/1000
+
+AAW_DSVI_2016<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2016", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2017<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2017", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2018<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2018", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2019<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2019", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2020<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2020", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2021<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2021", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_2022<- read_excel( "D://Speciale/Data/Extra data/2016-2022 DSVI Aalborg vest.xlsx", sheet = "2022", col_types = c("text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+AAW_DSVI_list <-  list(AAW_DSVI_2016, AAW_DSVI_2017, AAW_DSVI_2018, AAW_DSVI_2019, AAW_DSVI_2020, AAW_DSVI_2021, AAW_DSVI_2022)
+AAW_DSVI <- do.call(rbind, AAW_DSVI_list)
+AAW_DSVI <- AAW_DSVI[,1:7]
+
+AAW_DSVI$dSVI[is.na(AAW_DSVI$dSVI)] <- AAW_DSVI$SVI[is.na(AAW_DSVI$dSVI)]
+AAW_DSVI$Date <- as.Date(AAW_DSVI$Date, format = "%d. %B-%Y" )
+names(AAW_DSVI)[3] <- "SS"
+names(AAW_DSVI)[7] <- "DSVI"
+AAW_DSVI <- AAW_DSVI[,c("Date", "SS", "SVI", "DSVI")]
+AAW_DSVI$Plant  <- "Aalborg West"
+AAW_DSVI <- AAW_DSVI[order(AAW_DSVI$SS,decreasing=TRUE),]
+AAW_DSVI <- AAW_DSVI[-1,]
+
+MAR_DSVI<- read_excel( "D://Speciale/Data/Extra data/2017-2023 DSVI Mariagerfjord.xlsx", sheet = "LT", col_types = c("text","date","text","text","text","text","text", "numeric", "numeric", "numeric", "text","text","text"))
+names(MAR_DSVI)[2] <- "Date"
+names(MAR_DSVI)[8] <- "SS"
+names(MAR_DSVI)[9] <- "SVI"
+names(MAR_DSVI)[10] <- "DSVI"
+MAR_DSVI <- MAR_DSVI[,c("Date", "SS", "SVI", "DSVI")]
+MAR_DSVI$Date <- as.Date(MAR_DSVI$Date, format = "%Y-%m-%d" )
+MAR_DSVI$DSVI[is.na(MAR_DSVI$DSVI)] <- MAR_DSVI$SVI[is.na(MAR_DSVI$DSVI)]
+MAR_DSVI <- MAR_DSVI[!is.na(MAR_DSVI$DSVI),]
+MAR_DSVI$Plant  <- "Mariagerfjord"
+#MAR_DSVI[order(as.Date(MAR_DSVI$Date, format="%Y-%m-%d")),]
+MAR_DSVI <-MAR_DSVI [rev(order(as.Date(MAR_DSVI$Date, format="%Y-%m-%d"))),]
+MAR_DSVI <- MAR_DSVI[-1,]
+
+DSVI_collected <- rbind(DAM_DSVI, AAW_DSVI, AAE_DSVI, MAR_DSVI)
+DSVI_collected$Week <- lubridate::isoweek(DSVI_collected$Date)
+DSVI_collected$Year <- lubridate::isoyear(DSVI_collected$Date)
+
+```
+
+```{r}
+dsviplot <- ggplot(DSVI_collected)+ 
+  geom_line(  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y =  DSVI, color="DSVI")) +
+  geom_line( mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = SS*20, color="SS")) +
+   facet_wrap(~Plant)+
+  geom_hline(yintercept = 120,linetype=3, colour="red")+
+  labs( x="Date", y="DSVI [mL/g]") +
+  scale_y_continuous(  name = "DSVI [mL/g]",breaks = seq(0, 300, 50),
+    sec.axis = sec_axis( trans=~./20, name="SS [g/L]", breaks = seq(0, 20, 2))) +
+ # scale_x_date(date_breaks="365 days",date_labels = "%d.%m.%Y")+ 
+  theme(legend.position = "bottom") +
+  labs(color = "") +
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=summer, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#D6F1C6", color=NA) +
+  geom_rect(data=fall, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#F9CC87", color=NA) +
+  geom_rect(data=winter, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#C9F1FD", color=NA) +
+  theme( #legend.key.size = unit(1, 'cm'), #change legend key size
+       # legend.title = element_text(size=12), #change legend title font size
+       # legend.text = element_text(size=12),
+        #axis.text.x = element_text(size = 12),
+       # axis.text.y = element_text(size = 12),
+       # axis.title.y = element_text(size = 12),
+        strip.text.x = element_text(size = 10)
+        )
+
+dsviplot 
+plotName <- paste("D://Speciale/Data/Extra data/DsviTimeline.png")
+ggsave(plotName, width = 7.5, height = 5)
+```
+
+```{r}
+#indlæs biobank data
+d_AAE <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_AAE_eb3fbaf3848699473ec06be928a150b5.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_AAE_metadata.xlsx"
+)
+d_AAE$metadata$Plant <- "Aalborg East"
+d_AAE <- amp_subset_samples(
+  d_AAE,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+d_AAE$metadata <- d_AAE$metadata[,2:11]
+d_AAE_metadata <- d_AAE$metadata
+d_AAE$metadata$Date <- as.Date(d_AAE$metadata$Date, format="%Y-%m-%d")
+AAE_DSVI$Date <- as.Date(AAE_DSVI$Date, format="%Y-%m-%d")
+#merge settling data to dna data
+common_col_names <- intersect(names(d_AAE$metadata), names(AAE_DSVI))
+DSVImergedAAE <- merge(d_AAE$metadata, AAE_DSVI, by= common_col_names )
+d_DSVI_AAE <- amp_filter_samples(d_AAE, Sample %in% DSVImergedAAE$Sample)
+d_DSVI_AAE$metadata <-DSVImergedAAE 
+d_DSVI_AAE$metadata <- d_DSVI_AAE$metadata %>% distinct(Sample, .keep_all = TRUE)
+d_DSVI_AAE$metadata  <- d_DSVI_AAE$metadata %>%
+  select(Sample, everything())
+d_DSVI_AAE_metadata <- d_DSVI_AAE$metadata
+
+d_AAW <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_AAW_2448c73144695bd8292108ed800651e5.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_AAW_metadata.xlsx"
+)
+d_AAW$metadata$Plant <- "Aalborg West"
+d_AAW  <- amp_subset_samples(d_AAW, !Line %in% c("HC-O", "HC-U"))
+d_AAW <- amp_subset_samples(
+  d_AAW,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+d_AAW$metadata <- d_AAW$metadata[,1:10]
+d_AAW_metadata <- d_AAW$metadata
+d_AAW$metadata$Date <- as.Date(d_AAW$metadata$Date, format="%Y-%m-%d")
+AAW_DSVI$Date <- as.Date(AAW_DSVI$Date, format="%Y-%m-%d")
+#merge settling data to dna data
+common_col_names <- intersect(names(d_AAW$metadata), names(AAW_DSVI))
+DSVImergedAAW <- merge(d_AAW$metadata, AAW_DSVI, by= common_col_names )
+d_DSVI_AAW <- amp_filter_samples(d_AAW, Sample %in% DSVImergedAAW$Sample)
+d_DSVI_AAW$metadata <-DSVImergedAAW 
+d_DSVI_AAW$metadata <- d_DSVI_AAW$metadata %>% distinct(Sample, .keep_all = TRUE)
+d_DSVI_AAW$metadata  <- d_DSVI_AAW$metadata %>%
+  select(Sample, everything())
+d_DSVI_AAW_metadata <- d_DSVI_AAW$metadata
+
+d_DAM <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_DAM_22a9798c90c09a0bc39add3d4214ffab.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_DAM_metadata.xlsx"
+)
+d_DAM  <- amp_subset_samples(d_DAM, Line %in% "A")
+d_DAM$metadata$Plant <- "Damhusåen"
+d_DAM <- amp_subset_samples(
+  d_DAM,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+d_DAM$metadata <- d_DAM$metadata[,2:11]
+d_DAM_metadata <- d_DAM$metadata
+d_DAM$metadata$Date <- as.Date(d_DAM$metadata$Date, format="%Y-%m-%d")
+DAM_DSVI$Date <- as.Date(DAM_DSVI$Date, format="%Y-%m-%d")
+#merge settling data to dna data
+common_col_names <- intersect(names(d_DAM$metadata), names(DAM_DSVI))
+DSVImergedDAM <- merge(d_DAM$metadata, DAM_DSVI, by= common_col_names )
+d_DSVI_DAM <- amp_filter_samples(d_DAM, Sample %in% DSVImergedDAM$Sample)
+d_DSVI_DAM$metadata <-DSVImergedDAM 
+d_DSVI_DAM$metadata <- d_DSVI_DAM$metadata %>% distinct(Sample, .keep_all = TRUE)
+d_DSVI_DAM$metadata  <- d_DSVI_DAM$metadata %>%
+  select(Sample, everything())
+d_DSVI_DAM_metadata <- d_DSVI_DAM$metadata
+
+d_MAR <- amp_load(
+  otutable = "D://Speciale/Data/Extra data/biobank_MAR_56201035673d182d83cbb6a47511abb5.csv",
+    metadata = "D://Speciale/Data/Extra data/biobank_MAR_metadata.xlsx"
+)
+d_MAR <- amp_subset_samples(
+  d_MAR,
+  minreads = 10000,
+  rarefy = NULL,
+  normalise = TRUE,
+  removeAbsentOTUs = TRUE
+)
+d_MAR$metadata <- d_MAR$metadata[,2:11]
+d_MAR_metadata <- d_MAR$metadata
+d_MAR$metadata$Date <- as.Date(d_MAR$metadata$Date, format="%Y-%m-%d")
+MAR_DSVI$Date <- as.Date(MAR_DSVI$Date, format="%Y-%m-%d")
+#merge settling data to dna data
+common_col_names <- intersect(names(d_MAR$metadata), names(MAR_DSVI))
+DSVImergedMAR <- merge(d_MAR$metadata, MAR_DSVI, by= common_col_names )
+d_DSVI_MAR <- amp_filter_samples(d_MAR, Sample %in% DSVImergedMAR$Sample)
+d_DSVI_MAR$metadata <-DSVImergedMAR 
+d_DSVI_MAR$metadata <- d_DSVI_MAR$metadata %>% distinct(Sample, .keep_all = TRUE)
+d_DSVI_MAR_metadata <- d_DSVI_MAR$metadata
+d_DSVI_MAR$metadata  <- d_DSVI_MAR$metadata %>%
+  select(Sample, everything())
+d_DSVI_MAR_metadata <- d_DSVI_MAR$metadata
+
+#merge to one
+d_DSVI <- amp_merge_ampvis2(
+  d_DSVI_AAW,
+  d_DSVI_AAE,
+  d_DSVI_MAR,
+  d_DSVI_DAM,by_refseq = FALSE
+)
+
+d_DSVI$metadata$Date <- as.Date(d_DSVI$metadata$Date, format = "%Y-%m-%d" )
+d_DSVI_metadata <- d_DSVI$metadata
+#merge settling data to dna data
+#common_col_names <- intersect(names(d$metadata), names(DSVI_collected))
+#DSVImerged <- merge(d$metadata, DSVI_collected, by= common_col_names )
+
+#d_DSVI <- amp_filter_samples(d, Sample %in% DSVImerged$Sample)
+#d_sub <- d_DSVI
+#d_DSVI$metadata <-DSVImerged 
+
+#d_DSVI$metadata <- d_DSVI$metadata %>% distinct(Sample, .keep_all = TRUE)
+
+#d_DSVI_metadata <- d_DSVI$metadata 
+```
+
+
+```{r}
+d_DSVI_DAM_filt <- filter_otus(d_DSVI_DAM, filter_otus = 2)
+
+DAM_speciesordination <- amp_ordinate(
+  d_DSVI_DAM_filt,
+ type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_color_by = "DSVI",
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=3,
+ envfit_numeric = "DSVI",
+ envfit_show = TRUE,
+ envfit_textsize = 4
+)
+
+DAM_speciesordination
+
+
+
+
+d_DSVI_AAE_filt <- filter_otus(d_DSVI_AAE, filter_otus = 2)
+
+AAE_speciesordination <- amp_ordinate(
+  d_DSVI_AAE_filt,
+ type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_color_by = "DSVI",
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=5,
+ envfit_numeric = "DSVI",
+ envfit_show = TRUE,
+ envfit_textsize = 4
+)
+
+AAE_speciesordination
+
+
+d_DSVI_AAW_filt <- filter_otus(d_DSVI_AAW, filter_otus = 2)
+
+AAW_speciesordination <- amp_ordinate(
+  d_DSVI_AAW_filt,
+ type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_color_by = "DSVI",
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=5,
+ envfit_numeric = "DSVI",
+ envfit_show = TRUE,
+ envfit_textsize = 4
+)
+
+AAW_speciesordination
+
+
+
+d_DSVI_MAR_filt <- filter_otus(d_DSVI_MAR, filter_otus = 2)
+
+MAR_speciesordination <- amp_ordinate(
+  d_DSVI_MAR_filt,
+ type = "PCA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  sample_color_by = "DSVI",
+ species_plot=TRUE,
+ species_plotly=TRUE,
+ species_nlabels=5,
+ envfit_numeric = "DSVI",
+ envfit_show = TRUE,
+ envfit_textsize = 4,
+ envfit_signif_level = 0.05
+)
+
+MAR_speciesordination
+
+```
+
+
+
+
+```{r}
+speciesordination <-amp_ordinate(
+  d_DSVI,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  constrain = "DSVI",
+ sample_color_by = "DSVI",
+  sample_shape_by = "Plant",
+  sample_point_size = 1.5,
+ species_plot=TRUE,
+ #species_label_color = "purple",
+species_plotly=TRUE,
+ species_label_taxonomy = "Genus",
+ species_nlabels=5
+)
+
+speciesordination
+plotName <- paste("D://Speciale/Data/Extra data/speciesordination.png")
+ggsave(plotName, width = 6, height = 4)
+
+sampleordination_plot <- amp_ordinate(
+  d_DSVI,
+  type = "PCoA",
+  distmeasure = "bray",
+  transform = "none",
+  sample_point_size = 1.5,
+  #sample_colorframe_label = "Plant",
+  sample_color_by = "Plant",
+  # sample_shape_by = "Plant",
+  #sample_colorframe_label_size = 3,
+  sample_colorframe = TRUE,
+  #sample_trajectory = "Date",
+  #sample_trajectory_group = "Plant",
+ # sample_label_by ="LibID"
+)
+
+sampleordination_plot
+plotName <- paste("D://Speciale/Data/Extra data/sampleordination.png")
+ggsave(plotName, width = 6, height = 4)
+
+
+```
+
+```{r}
+#correlation mellem DSVI og SS
+#Test for normal distribution
+shapiro.test(d_DSVI_metadata$DSVI)
+shapiro.test(d_DSVI_metadata$SS)
+qqnorm(d_DSVI_metadata$DSVI)
+qqnorm(d_DSVI_metadata$SS)
+#normalfordelt
+
+
+SS_DSVI_Cor_Pear<- ggscatter(d_DSVI_metadata, x="SS", y="DSVI", color= "Plant", size = 0.4) +
+  geom_smooth(method = "lm", se = TRUE, level = 0.95, color="black")+
+  stat_cor(aes(), method = "pearson")+ 
+  labs(x="SS [g/L]", y="DSVI [mL/g]")+
+  theme_bw()+
+  scale_y_continuous(breaks = round(seq(min(50), max(350), by =50),1))+
+  scale_x_continuous(breaks = round(seq(min(2), max(9), by = 1),1))+
+  theme(legend.position = "bottom")#+
+ # guides(color=guide_legend(nrow=2,byrow=TRUE))
+
+SS_DSVI_Cor_Pear
+plotName <- paste("D://Speciale/Data/Extra data/SS+DSVIcor.png")
+ggsave(plotName, width = 5.5, height = 4)
+
+
+```
+
+```{r}
+#d_DSVI$metadata <- within(d_DSVI$metadata, Plant[Date >= "2020-01-01" & Plant =="Aalborg West"] <- "Aalborg West after HC")
+
+heatmap_collected <- amp_heatmap(
+  d_DSVI, 
+  group_by = "Plant",
+  tax_aggregate = "Genus", 
+  tax_add = "Phylum",
+  normalise = FALSE,
+  max_abundance = 35,
+  functions = c("Filamentous", "AOB", "NOB", "Nitrite reduction", "PAO", "GAO" ),
+  #rel_widths = c(0.9,0.1),
+  tax_show = 50,
+  plot_values_size = 4,
+  color_vector = c("#91bfdb","#ffffbf","#fc8d59"),
+  plot_functions = TRUE, 
+  showRemainingTaxa = TRUE
+)
+heatmap_collected
+plotName <- paste("D://Speciale/Data/Extra data/heatmapcollected.png")
+ggsave(plotName, width = 9, height = 9)
+
+
+```
+
+```{r}
+genus_d_DSVI <- aggregate_abund(
+   d_DSVI$abund,
+  d_DSVI$tax,
+  tax_aggregate = "Genus",
+  tax_add = NULL,
+  calcSums = TRUE,
+  format = "long"
+)
+genus_d_DSVI <- genus_d_DSVI[,-"Abundance"]
+genus_d_DSVI <- distinct(genus_d_DSVI)
+#Add tax and make column with Phylum and genera combined
+d_DSVI_tax <- d_DSVI$tax
+tax_genusup <- d_DSVI_tax[,2:6]
+tax_genusup <- distinct(tax_genusup)
+tax_genusup <- unite(data=tax_genusup,"Phylum.Genus", c(Phylum,Genus), sep=",", na.rm = TRUE, remove = FALSE)
+names(genus_d_DSVI)[1] <- "Genus"
+genus_d_DSVI <- merge(genus_d_DSVI, tax_genusup , by="Genus" )
+#merge to DSVI 
+common_col_names <- intersect(names(genus_d_DSVI), names(d_DSVI$metadata))
+genus_d_DSVI <- merge(genus_d_DSVI, d_DSVI$metadata, by=common_col_names)
+genus_d_DSVI  <- as.data.frame(genus_d_DSVI )
+#Removing rows with DSVI = NA 
+genus_d_DSVI <- genus_d_DSVI[!is.na(genus_d_DSVI$DSVI),]
+genus_list_DSVI <- split(genus_d_DSVI, genus_d_DSVI$Phylum.Genus)
+names(genus_d_DSVI)[2] <- "Genus"
+#Remove genera if all samples are less than 0.1 abund
+keep_rows <- sapply(genus_list_DSVI, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_DSVI <- genus_list_DSVI[keep_rows]
+
+genus_count <- n_distinct(genus_d_DSVI$Genus)
+
+##Correlation to DSVI (not normal distribution)
+CorDSVI_result_list <- lapply(genus_list_DSVI, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+
+
+  SigCor_DSVI <- do.call(rbind, CorDSVI_result_list)
+  SigCor_DSVI <- as.data.frame(SigCor_DSVI)
+  SigCor_DSVI <- cbind(rownames(SigCor_DSVI), data.frame(SigCor_DSVI, row.names=NULL))
+  names(SigCor_DSVI)[1] <- "Genus"
+  SigCor_DSVI <- SigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  SigCor_DSVI$p.value <- as.numeric(SigCor_DSVI$p.value)
+   SigCor_DSVI$estimate <- as.numeric(SigCor_DSVI$estimate)
+  SigCor_DSVI$p.value <- round(SigCor_DSVI$p.value, digits = 3)
+  SigCor_DSVI <- subset(SigCor_DSVI, SigCor_DSVI$p.value < 0.05)
+names(SigCor_DSVI)[3] <- "CorCoef"
+SigCor_DSVI$CorTest <- "Spearman"
+SigCor_DSVI$Plant <- "Total"
+
+filtSigCor_DSVI <- subset(SigCor_DSVI, SigCor_DSVI$CorCoef > 0.6 | SigCor_DSVI$CorCoef < -0.6)
+ggplot(filtSigCor_DSVI, aes(x=Genus, y=CorCoef))+ 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_y_continuous(breaks = round(seq(min(-1), max(1), by = 0.2),1))+
+  geom_text(aes(label = round(CorCoef, digits = 2)), hjust = 0.5,  vjust = -1)
+
+parameterName <- paste("D://Speciale/Data/Extra data/", "Biobank_SigCor_DSVI.csv", sep = "")
+write.csv(SigCor_DSVI, parameterName)
+
+
+
+```
+
+```{r}
+genus_d_AAE <- subset(genus_d_DSVI, Plant == "Aalborg East")
+genus_list_AAE <- split(genus_d_AAE, genus_d_AAE$Phylum.Genus)
+keep_rows <- sapply(genus_list_AAE, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_AAE <- genus_list_AAE[keep_rows]
+
+genus_d_AAW <- subset(genus_d_DSVI, Plant == "Aalborg West")
+genus_list_AAW <- split(genus_d_AAW, genus_d_AAW$Phylum.Genus)
+keep_rows <- sapply(genus_list_AAW, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_AAW <- genus_list_AAW[keep_rows]
+
+genus_d_DAM <- subset(genus_d_DSVI, Plant == "Damhusåen")
+genus_list_DAM <- split(genus_d_DAM, genus_d_DAM$Phylum.Genus)
+keep_rows <- sapply(genus_list_DAM, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_DAM <- genus_list_DAM[keep_rows]
+
+genus_d_MAR <- subset(genus_d_DSVI, Plant == "Mariagerfjord")
+genus_list_MAR <- split(genus_d_MAR, genus_d_MAR$Phylum.Genus)
+keep_rows <- sapply(genus_list_MAR, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_MAR <- genus_list_MAR[keep_rows]
+
+```
+
+```{r}
+#Test for normal distribution
+shapiro_fun <- function(df, col) {
+  as.numeric(df[, col])
+  shapiro.test(df[, col])
+}
+genus_DAM_shapiro_DSVI <- lapply(genus_list_DAM, shapiro_fun, col = "DSVI")
+genus_DAM_shapiro_DSVI <- lapply(genus_list_DAM, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_DAM_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_DAM_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_DAM[names(genus_list_DAM) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_DAM[!names(genus_list_DAM) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+DAMCorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  DAMSigCor_DSVI <- do.call(rbind, DAMCorDSVI_result_list)
+  DAMSigCor_DSVI <- as.data.frame(DAMSigCor_DSVI)
+  DAMSigCor_DSVI <- cbind(rownames(DAMSigCor_DSVI), data.frame(DAMSigCor_DSVI, row.names=NULL))
+  names(DAMSigCor_DSVI)[1] <- "Genus"
+  DAMSigCor_DSVI <- DAMSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  DAMSigCor_DSVI$p.value <- as.numeric(DAMSigCor_DSVI$p.value)
+   DAMSigCor_DSVI$estimate <- as.numeric(DAMSigCor_DSVI$estimate)
+  DAMSigCor_DSVI$p.value <- round(DAMSigCor_DSVI$p.value, digits = 3)
+  DAMSigCor_DSVI <- subset(DAMSigCor_DSVI, DAMSigCor_DSVI$p.value < 0.05)
+names(DAMSigCor_DSVI)[3] <- "CorCoef"
+DAMSigCor_DSVI$CorTest <- "Spearman"
+##Correlation to DSVI (normal distribution)
+pearsonDAMCorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonDAMSigCor_DSVI <- do.call(rbind, pearsonDAMCorDSVI_result_list)
+  pearsonDAMSigCor_DSVI <- as.data.frame(pearsonDAMSigCor_DSVI)
+  pearsonDAMSigCor_DSVI <- cbind(rownames(pearsonDAMSigCor_DSVI), data.frame(pearsonDAMSigCor_DSVI, row.names=NULL))
+  names(pearsonDAMSigCor_DSVI)[1] <- "Genus"
+  pearsonDAMSigCor_DSVI <- pearsonDAMSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonDAMSigCor_DSVI$p.value <- as.numeric(pearsonDAMSigCor_DSVI$p.value)
+   pearsonDAMSigCor_DSVI$estimate <- as.numeric(pearsonDAMSigCor_DSVI$estimate)
+  pearsonDAMSigCor_DSVI$p.value <- round(pearsonDAMSigCor_DSVI$p.value, digits = 3)
+  pearsonDAMSigCor_DSVI <- subset(pearsonDAMSigCor_DSVI, pearsonDAMSigCor_DSVI$p.value < 0.05)
+names(pearsonDAMSigCor_DSVI)[3] <- "CorCoef"
+pearsonDAMSigCor_DSVI$CorTest <- "Pearson"
+DAMSigCor_DSVI <- rbind(DAMSigCor_DSVI, pearsonDAMSigCor_DSVI)
+DAMSigCor_DSVI$Plant <- "Damhusåen"
+
+
+
+
+#Test for normal distribution
+genus_MAR_shapiro_DSVI <- lapply(genus_list_MAR, shapiro_fun, col = "DSVI")
+genus_MAR_shapiro_DSVI <- lapply(genus_list_MAR, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_MAR_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_MAR_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_MAR[names(genus_list_MAR) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_MAR[!names(genus_list_MAR) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+MARCorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  MARSigCor_DSVI <- do.call(rbind, MARCorDSVI_result_list)
+  MARSigCor_DSVI <- as.data.frame(MARSigCor_DSVI)
+  MARSigCor_DSVI <- cbind(rownames(MARSigCor_DSVI), data.frame(MARSigCor_DSVI, row.names=NULL))
+  names(MARSigCor_DSVI)[1] <- "Genus"
+  MARSigCor_DSVI <- MARSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  MARSigCor_DSVI$p.value <- as.numeric(MARSigCor_DSVI$p.value)
+   MARSigCor_DSVI$estimate <- as.numeric(MARSigCor_DSVI$estimate)
+  MARSigCor_DSVI$p.value <- round(MARSigCor_DSVI$p.value, digits = 3)
+  MARSigCor_DSVI <- subset(MARSigCor_DSVI, MARSigCor_DSVI$p.value < 0.05)
+names(MARSigCor_DSVI)[3] <- "CorCoef"
+MARSigCor_DSVI$CorTest <- "Spearman"
+##Correlation to DSVI (normal distribution)
+pearsonMARCorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonMARSigCor_DSVI <- do.call(rbind, pearsonMARCorDSVI_result_list)
+  pearsonMARSigCor_DSVI <- as.data.frame(pearsonMARSigCor_DSVI)
+  pearsonMARSigCor_DSVI <- cbind(rownames(pearsonMARSigCor_DSVI), data.frame(pearsonMARSigCor_DSVI, row.names=NULL))
+  names(pearsonMARSigCor_DSVI)[1] <- "Genus"
+  pearsonMARSigCor_DSVI <- pearsonMARSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonMARSigCor_DSVI$p.value <- as.numeric(pearsonMARSigCor_DSVI$p.value)
+   pearsonMARSigCor_DSVI$estimate <- as.numeric(pearsonMARSigCor_DSVI$estimate)
+  pearsonMARSigCor_DSVI$p.value <- round(pearsonMARSigCor_DSVI$p.value, digits = 3)
+  pearsonMARSigCor_DSVI <- subset(pearsonMARSigCor_DSVI, pearsonMARSigCor_DSVI$p.value < 0.05)
+names(pearsonMARSigCor_DSVI)[3] <- "CorCoef"
+pearsonMARSigCor_DSVI$CorTest <- "Pearson"
+MARSigCor_DSVI <- rbind(MARSigCor_DSVI, pearsonMARSigCor_DSVI)
+MARSigCor_DSVI$Plant <- "Mariagerfjord"
+
+
+
+
+#Test for normal distribution
+genus_AAE_shapiro_DSVI <- lapply(genus_list_AAE, shapiro_fun, col = "DSVI")
+genus_AAE_shapiro_DSVI <- lapply(genus_list_AAE, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_AAE_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_AAE_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_AAE[names(genus_list_AAE) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_AAE[!names(genus_list_AAE) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+AAECorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  AAESigCor_DSVI <- do.call(rbind, AAECorDSVI_result_list)
+  AAESigCor_DSVI <- as.data.frame(AAESigCor_DSVI)
+  AAESigCor_DSVI <- cbind(rownames(AAESigCor_DSVI), data.frame(AAESigCor_DSVI, row.names=NULL))
+  names(AAESigCor_DSVI)[1] <- "Genus"
+  AAESigCor_DSVI <- AAESigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  AAESigCor_DSVI$p.value <- as.numeric(AAESigCor_DSVI$p.value)
+   AAESigCor_DSVI$estimate <- as.numeric(AAESigCor_DSVI$estimate)
+  AAESigCor_DSVI$p.value <- round(AAESigCor_DSVI$p.value, digits = 3)
+  AAESigCor_DSVI <- subset(AAESigCor_DSVI, AAESigCor_DSVI$p.value < 0.05)
+names(AAESigCor_DSVI)[3] <- "CorCoef"
+AAESigCor_DSVI$CorTest <- "Spearman"
+##Correlation to DSVI (normal distribution)
+pearsonAAECorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonAAESigCor_DSVI <- do.call(rbind, pearsonAAECorDSVI_result_list)
+  pearsonAAESigCor_DSVI <- as.data.frame(pearsonAAESigCor_DSVI)
+  pearsonAAESigCor_DSVI <- cbind(rownames(pearsonAAESigCor_DSVI), data.frame(pearsonAAESigCor_DSVI, row.names=NULL))
+  names(pearsonAAESigCor_DSVI)[1] <- "Genus"
+  pearsonAAESigCor_DSVI <- pearsonAAESigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonAAESigCor_DSVI$p.value <- as.numeric(pearsonAAESigCor_DSVI$p.value)
+   pearsonAAESigCor_DSVI$estimate <- as.numeric(pearsonAAESigCor_DSVI$estimate)
+  pearsonAAESigCor_DSVI$p.value <- round(pearsonAAESigCor_DSVI$p.value, digits = 3)
+  pearsonAAESigCor_DSVI <- subset(pearsonAAESigCor_DSVI, pearsonAAESigCor_DSVI$p.value < 0.05)
+names(pearsonAAESigCor_DSVI)[3] <- "CorCoef"
+pearsonAAESigCor_DSVI$CorTest <- "Pearson"
+AAESigCor_DSVI <- rbind(AAESigCor_DSVI, pearsonAAESigCor_DSVI)
+AAESigCor_DSVI$Plant <- "Aalborg East"
+
+
+
+#Test for normal distribution
+genus_AAW_shapiro_DSVI <- lapply(genus_list_AAW, shapiro_fun, col = "DSVI")
+genus_AAW_shapiro_DSVI <- lapply(genus_list_AAW, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_AAW_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_AAW_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_AAW[names(genus_list_AAW) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_AAW[!names(genus_list_AAW) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+AAWCorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  AAWSigCor_DSVI <- do.call(rbind, AAWCorDSVI_result_list)
+  AAWSigCor_DSVI <- as.data.frame(AAWSigCor_DSVI)
+  AAWSigCor_DSVI <- cbind(rownames(AAWSigCor_DSVI), data.frame(AAWSigCor_DSVI, row.names=NULL))
+  names(AAWSigCor_DSVI)[1] <- "Genus"
+  AAWSigCor_DSVI <- AAWSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  AAWSigCor_DSVI$p.value <- as.numeric(AAWSigCor_DSVI$p.value)
+   AAWSigCor_DSVI$estimate <- as.numeric(AAWSigCor_DSVI$estimate)
+  AAWSigCor_DSVI$p.value <- round(AAWSigCor_DSVI$p.value, digits = 3)
+  AAWSigCor_DSVI <- subset(AAWSigCor_DSVI, AAWSigCor_DSVI$p.value < 0.05)
+names(AAWSigCor_DSVI)[3] <- "CorCoef"
+AAWSigCor_DSVI$CorTest <- "Spearman"
+##Correlation to DSVI (normal distribution)
+pearsonAAWCorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonAAWSigCor_DSVI <- do.call(rbind, pearsonAAWCorDSVI_result_list)
+  pearsonAAWSigCor_DSVI <- as.data.frame(pearsonAAWSigCor_DSVI)
+  pearsonAAWSigCor_DSVI <- cbind(rownames(pearsonAAWSigCor_DSVI), data.frame(pearsonAAWSigCor_DSVI, row.names=NULL))
+  names(pearsonAAWSigCor_DSVI)[1] <- "Genus"
+  pearsonAAWSigCor_DSVI <- pearsonAAWSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonAAWSigCor_DSVI$p.value <- as.numeric(pearsonAAWSigCor_DSVI$p.value)
+   pearsonAAWSigCor_DSVI$estimate <- as.numeric(pearsonAAWSigCor_DSVI$estimate)
+  pearsonAAWSigCor_DSVI$p.value <- round(pearsonAAWSigCor_DSVI$p.value, digits = 3)
+  pearsonAAWSigCor_DSVI <- subset(pearsonAAWSigCor_DSVI, pearsonAAWSigCor_DSVI$p.value < 0.05)
+names(pearsonAAWSigCor_DSVI)[3] <- "CorCoef"
+pearsonAAWSigCor_DSVI$CorTest <- "Pearson"
+
+AAWSigCor_DSVI <- rbind(AAWSigCor_DSVI, pearsonAAWSigCor_DSVI)
+AAWSigCor_DSVI$Plant <- "Aalborg West"
+```
+
+```{r}
+#gather correlation coeffs and make plot
+Total_cor <- rbind(SigCor_DSVI, AAWSigCor_DSVI, AAESigCor_DSVI, DAMSigCor_DSVI, MARSigCor_DSVI)
+Total_cor <- Total_cor[order(Total_cor$CorCoef,decreasing=TRUE),]
+filt_0.5_Total_cor <- subset(Total_cor, Total_cor$CorCoef > 0.5 |Total_cor$CorCoef < -0.5)
+filt_Total_Cor <- subset(Total_cor, Genus %in% filt_0.5_Total_cor$Genus)
+
+genus_count <- n_distinct(filt_Total_Cor$Genus)
+
+Cor_Heatmap <- ggplot(filt_Total_Cor, aes(x=Plant,y = reorder(Genus, CorCoef), fill= CorCoef)) + 
+  geom_tile()+
+  scale_fill_gradient2(low = "#075AFF",
+                       mid = "#FFFFCC",
+                       high = "#FF0000") +
+  theme(axis.text.x = element_text(angle = 90))+
+ geom_text(aes(label = round(CorCoef, digits = 2)), color = "black", size = 3)+
+  theme(legend.position = "top")+
+  labs(fill="Correlation Coefficient", y="Genus")
+Cor_Heatmap
+plotName <- paste("D://Speciale/Data/Extra data/cor_heatmap_test.png")
+ggsave(plotName, width = 7, height = 15)
+
+parameterName <- paste("D://Speciale/Data/Extra data/", "Biobank_Total_cor.csv", sep = "")
+write.csv(Total_cor, parameterName)
+
+
+
+```
+
+```{r}
+Filaments <- c(
+"g__Acinetobacter",
+"g__Beggiatoa",
+"g__Ca_Alysiosphaera",
+"g__Ca_Amarolinea",
+"g__Ca_Defluviicoccus_seviourii",
+"g__Ca_Microthrix",
+"g__Ca_Nostocoida",
+"g__Ca_Promineofilum",
+"g__Ca_Sarcinithrix",
+"g__Ca_Villigracilis",
+"g__Gordonia",
+"g__Haliscomenobacter",
+"g__Kouleothrix",
+"g__Leptothrix",
+"g__midas_g_105",
+"g__midas_g_1668",
+"g__midas_g_2111",
+"g__midas_g_344",
+"g__midas_s_328",
+"g__Mycobacterium",
+"g__Neomegalonema",
+"g__Skermania",
+"g__Sphaerotilus",
+"g__Thiothrix",
+"g__Trichococcus"
+)
+
+GAO <- c("g__Defluviicoccus",
+           "g__Propionivibrio",
+           "g__Ca_Competibacter",
+           "g__Ca_Contendobacter",
+           "g__Micropruina",
+           "g__spb280",
+           "g__midas2_CCM19a",
+         "g__Kineosphaera",
+           "g__midas2_sbr-gs28"
+)
+#d_GAO <- amp_subset_taxa(d,
+#  tax_vector = GAO
+#)
+PAO <- c("g__Tetrasphaera",
+"g__Dechloromonas",
+"g__Ca_Accumulibacter",
+"g__Tessaracoccus",
+"g__Ca_Obscuribacter",
+"g__Gemmatimonas",
+"g__Microlunatus",
+"g__Friedmanniella",
+"g__Quatrionicoccus",
+"g__Halomonas"
+)
+#d_PAO <- amp_subset_taxa(d,
+#  tax_vector = PAO
+#)
+NOB_AOB <- c("g__Nitrosomonas", 
+              "g__Nitrosospira",
+              "g__Nitrosococcus",
+              "g__Nitrosolobus",
+               "g__Nitrosovibrio",
+               'g__Ca_Brocadia',
+              'g__Ca_Scalindua',
+             "g__Nitrobacter",
+               "g__Nitrospira",
+                "g__Nitrotoga",
+                "g__Nitrolancea",
+                'g__Ca_Brocadia'
+)
+#d_NOB_AOB <- amp_subset_taxa(d,
+#  tax_vector = NOB_AOB
+#)
+```
+
+```{r}
+#select genera of interest from genera with cor>0.5
+filt_0.5_Total_cor <- subset(Total_cor, Total_cor$CorCoef > 0.5 |Total_cor$CorCoef < -0.5)
+filt_genus_d_DSVI <- subset(genus_d_DSVI, Phylum.Genus %in%filt_0.5_Total_cor$Genus)
+
+
+
+g_Fila <- subset(genus_d_DSVI, Genus %in% Filaments)
+ g_Fila <-  g_Fila[order(- g_Fila$Sum),] 
+g_Fila$Genus <- factor( g_Fila$Genus, levels=unique( g_Fila$Genus))
+ g_Fila$Phylum.Genus <- factor(  g_Fila$Phylum.Genus, levels=unique( g_Fila$Phylum.Genus ))
+g_NOB <- subset(genus_d_DSVI, Genus %in% NOB_AOB)
+ g_NOB <-  g_NOB[order(- g_NOB$Sum),] 
+g_NOB$Phylum.Genus <- factor( g_NOB$Phylum.Genus, levels=unique( g_NOB$Phylum.Genus))
+g_NOB$Genus <- factor( g_NOB$Genus, levels=unique( g_NOB$Genus))
+g_PAO <- subset(genus_d_DSVI, Genus %in% PAO)
+ g_PAO <-  g_PAO[order(- g_PAO$Sum),] 
+ g_PAO$Phylum.Genus <- factor(  g_PAO$Phylum.Genus, levels=unique( g_PAO$Phylum.Genus ))
+g_PAO$Genus <- factor( g_PAO$Genus, levels=unique( g_PAO$Genus))
+g_GAO <- subset(genus_d_DSVI, Genus %in% GAO)
+ g_GAO <-  g_GAO[order(- g_GAO$Sum),] 
+g_GAO$Genus <- factor( g_GAO$Genus, levels=unique( g_GAO$Genus))
+
+#aggregate species
+g_interest <- c( Filaments, NOB_AOB, PAO, GAO)
+d_g_interest <- amp_filter_taxa(d_DSVI,
+  tax_vector = g_interest
+)
+
+s_interest <- aggregate_abund(
+   d_g_interest$abund,
+  d_g_interest$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+
+#merge to DSVI 
+common_col_names <- intersect(names(s_interest), names(d_DSVI$metadata))
+s_interest <- merge(s_interest, d_DSVI$metadata, by=common_col_names)
+s_interest  <- as.data.frame(s_interest)
+s_interest_list <- split(s_interest, s_interest$Display)
+#Remove genera if all samples are less than 0.1 abund
+keep_rows <- sapply(s_interest_list, function(df) any(df[, "Sum"] >= 0.3))
+s_interest_list <- s_interest_list[keep_rows]
+s_interest <- do.call(rbind, s_interest_list)
+  s_interest <- as.data.frame(s_interest)
+ s_interest <- cbind(rownames(s_interest), data.frame(s_interest, row.names=NULL))
+ names(s_interest)[3] <- "Species"
+ 
+  s_interest <-  s_interest[order(- s_interest$Sum),] 
+ s_interest$Species <- factor( s_interest$Species, levels=unique( s_interest$Species))
+```
+
+
+
+```{r}
+
+g_Fila <- subset(g_Fila, !Genus %in% c("g__midas_g_2111","g__Acinetobacter", "g__Ca_Nostocoida", "g__Ca_Alysiosphaera", "g__Kouleothrix", "g__Neomegalonema"))
+Fila_corplant_scatter <- ggscatter(g_Fila, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Phylum.Genus", scales = "free", ncol=4,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Fila_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Fila_scatter.png")
+ggsave(plotName, width = 11, height = 14)
+
+
+
+s_Micro <- s_interest[grepl("^g__Ca_Microthrix",s_interest$Species),]
+Micro_corplant_scatter <- ggscatter(s_Micro, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Micro_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Micro_scatter.png")
+ggsave(plotName, width = 8, height = 5)
+
+s_Villi <- s_interest[grepl("^g__Ca_Villigracilis",s_interest$Species),]
+Villi_corplant_scatter <- ggscatter(s_Villi, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Villi_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Villi_scatter.png")
+ggsave(plotName, width = 10, height = 5)
+
+
+
+```
+
+```{r}
+#collect GAO
+g_GAO <- subset(g_GAO, !Genus %in% c("g__Micropruina", "g__Kineosphaera"))
+GAO_corplant_scatter <- ggscatter(g_GAO, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Genus", scales = "free", ncol=2,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+GAO_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_GAO_scatter.png")
+ggsave(plotName, width = 10, height = 9)
+
+s_Compe <- s_interest[grepl("^g__Ca_Competibacter",s_interest$Species),]
+Compe_corplant_scatter <- ggscatter(s_Compe, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Compe_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Compe_scatter.png")
+ggsave(plotName, width = 10, height = 13)
+
+
+```
+
+```{r}
+#collect PAO
+g_PAO <- subset(g_PAO, !Genus %in% c("g__Microlunatus", "g__Quatrionicoccus", "g__Halomonas"))
+g_PAO <-  g_PAO[order(- g_PAO$Sum),] 
+PAO_corplant_scatter <- ggscatter(g_PAO, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Phylum.Genus", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+PAO_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_PAO_scatter.png")
+ggsave(plotName, width = 10, height = 9)
+
+
+
+s_Tetra <- s_interest[grepl("^g__Tetrasphaera",s_interest$Species),]
+Tetra_corplant_scatter <- ggscatter(s_Tetra, x = "DSVI", y = "Sum",size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=4,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Tetra_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_tetra_scatter.png")
+ggsave(plotName, width = 11, height = 7)
+
+
+s_Dechlo <- s_interest[grepl("^g__Dechloromonas",s_interest$Species),]
+s_Dechlo$Species <- gsub("g__Dechloromonas; ", "", s_Dechlo$Species)
+s_Dechlo <- subset(s_Dechlo, !Species == "s__midas_s_84370")
+Dechlo_corplant_scatter <- ggscatter(s_Dechlo, x = "DSVI", y = "Sum",size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+Dechlo_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Dechlo_scatter.png")
+ggsave(plotName, width = 10, height = 7)
+
+
+
+```
+
+```{r}
+#collect NOB
+g_NOB <- subset(g_NOB, !Genus %in% c("g__Nitrosospira"))
+NOB_corplant_scatter <- ggscatter(g_NOB, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Phylum.Genus", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+NOB_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_NOB_scatter.png")
+ggsave(plotName, width = 9, height = 4.5)
+
+
+s_N.Spira <- s_interest[grepl("^g__Nitrospira",s_interest$Species),]
+N.Spira_corplant_scatter <- ggscatter(s_N.Spira, x = "DSVI", y = "Sum",size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+
+  theme(legend.position = "none", axis.title.x = element_blank())+
+  ggtitle("Nitrospira spp.")+
+  coord_cartesian(ylim = c(0, NA))
+N.Spira_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/corplant_tetra_scatter.png")
+#ggsave(plotName, width = 10, height = 12)
+
+s_N.toga <- s_interest[grepl("^g__Nitrotoga",s_interest$Species),]
+N.toga_corplant_scatter <- ggscatter(s_N.toga, x = "DSVI", y = "Sum",size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+
+  theme(legend.position = "none",axis.title.y = element_blank(), axis.title.x =element_blank())+
+  ggtitle("Nitrotoga spp.")+
+  coord_cartesian(ylim = c(0, NA))
+N.toga_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/corplant_tetra_scatter.png")
+#ggsave(plotName, width = 10, height = 12)
+
+s_N.somonas <- s_interest[grepl("^g__Nitrosomonas",s_interest$Species),]
+N.somonas_corplant_scatter <- ggscatter(s_N.somonas, x = "DSVI", y = "Sum",size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+ggtitle("Nitrosomonas spp.")+
+  coord_cartesian(ylim = c(0, NA))
+N.somonas_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_Nsomonas_scatter.png")
+ggsave(plotName, width = 9, height = 5)
+
+
+corplant_NOBsp_scatter <- ggarrange(ggarrange( N.Spira_corplant_scatter,N.toga_corplant_scatter, ncol = 2, widths = c(2,1), legend = "none"), N.somonas_corplant_scatter,  nrow=2, common.legend = TRUE, legend="bottom" )
+
+plotName <- paste("D://Speciale/Data/Extra data/corplant_NOBsp_scatter.png")
+ggsave(plotName, width = 10, height = 6)
+
+```
+
+```{r}
+#select genera of interest from genera with cor>0.5
+filt_0.5_Total_cor <- subset(Total_cor, Total_cor$CorCoef > 0.65 |Total_cor$CorCoef < -0.65)
+
+filt_genus_d_DSVI <- subset(genus_d_DSVI, Phylum.Genus %in%filt_0.5_Total_cor$Genus)
+g_others <- subset(filt_genus_d_DSVI, !Genus %in% g_interest)
+v_others <- unique(c(g_others$Genus))
+
+
+d_others <- amp_filter_taxa(d_DSVI,
+  tax_vector = v_others)
+
+#aggregate species
+s_interest_others <- aggregate_abund(
+   d_others$abund,
+  d_others$tax,
+  tax_aggregate = "Species",
+  tax_add = "Genus",
+  calcSums = TRUE,
+  format = "long"
+)
+
+#merge to DSVI 
+common_col_names <- intersect(names(s_interest_others), names(d_DSVI$metadata))
+s_interest_others <- merge(s_interest_others, d_DSVI$metadata, by=common_col_names)
+s_interest_others  <- as.data.frame(s_interest_others)
+s_interest_others_list <- split(s_interest_others, s_interest_others$Display)
+#Remove genera if all samples are less than 0.1 abund
+keep_rows <- sapply(s_interest_others_list, function(df) any(df[, "Sum"] >= 0.3))
+s_interest_others_list <- s_interest_others_list[keep_rows]
+s_interest_others <- do.call(rbind, s_interest_others_list)
+  s_interest_others <- as.data.frame(s_interest_others)
+ s_interest_others <- cbind(rownames(s_interest_others), data.frame(s_interest_others, row.names=NULL))
+ names(s_interest_others)[3] <- "Species"
+ 
+  s_interest_others <-  s_interest_others[order(- s_interest_others$Sum),] 
+ s_interest_others$Species <- factor( s_interest_others$Species, levels=unique( s_interest_others$Species))
+```
+
+```{r}
+g_others <- subset(g_others, Genus %in% c("g__midas_g_2842", "g__midas_g_4258", "g__midas_g_4774", "g__midas_g_10902", "g__midas_g_8524", "g__Ca_Saccharimonas", "g__midas_g_731", "g__midas_g_171", "g__Stella"))
+g_others <-  g_others[order(- g_others$Sum),] 
+g_others$Phylum.Genus <- factor( g_others$Phylum.Genus, levels=unique( g_others$Phylum.Genus))
+
+others_corplant_scatter <- ggscatter(g_others, x = "DSVI", y = "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Phylum.Genus", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")+theme(legend.position = "bottom")+
+  coord_cartesian(ylim = c(0, NA))
+others_corplant_scatter
+plotName <- paste("D://Speciale/Data/Extra data/corplant_others_scatter.png")
+ggsave(plotName, width = 10, height = 10)
+```
+
+```{r}
+s_12444 <- s_interest_others[grepl("^g__midas_g_12444",s_interest_others$Species),]
+g12444_corplant_scatter <- ggscatter(s_12444, x = "DSVI", y =  "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")
+g12444_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/tetrasphaera_corplant_scatter.png")
+#ggsave(plotName, width = 14, height = 7.5)
+
+
+
+
+  s_2842 <- s_interest_others[grepl("^g__midas_g_2842",s_interest_others$Species),]
+g2842_corplant_scatter <- ggscatter(s_2842, x = "DSVI", y =  "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")
+g2842_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/tetrasphaera_corplant_scatter.png")
+#ggsave(plotName, width = 14, height = 7.5)
+
+
+
+  s_120 <- s_interest_others[grepl("^g__midas_g_120",s_interest_others$Species),]
+g120_corplant_scatter <- ggscatter(s_120, x = "DSVI", y =  "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")
+g120_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/tetrasphaera_corplant_scatter.png")
+#ggsave(plotName, width = 14, height = 7.5)
+
+
+  s_Ana <- s_interest_others[grepl("^g__Anaerolinea",s_interest_others$Species),]
+  s_Ana <- subset(s_Ana, s_Ana$Species =="g__Anaerolinea; s__midas_s_3123")
+Ana_corplant_scatter <- ggscatter(s_Ana, x = "DSVI", y =  "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")
+Ana_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/tetrasphaera_corplant_scatter.png")
+#ggsave(plotName, width = 14, height = 7.5)
+
+  s_Hali <- s_interest_others[grepl("^g__Haliangium",s_interest_others$Species),]
+Hali_corplant_scatter <- ggscatter(s_Hali, x = "DSVI", y =  "Sum", size = 0.4,
+          color = "Plant",
+          facet.by = "Species", scales = "free", ncol=3,
+          add = "reg.line", conf.int = TRUE) +
+  stat_cor(aes(color =Plant), method = "spearman")+ labs(x="DSVI [mL/g]", y="Read abundance [%]")+
+  grids(linetype = "dashed")
+Hali_corplant_scatter
+#plotName <- paste("D://Speciale/Data/Extra data/tetrasphaera_corplant_scatter.png")
+#ggsave(plotName, width = 14, height = 7.5)
+
+
+
+
+ggarrange(ggarrange(g12444_corplant_scatter,Ana_corplant_scatter, nrow=1, common.legend = TRUE, legend="none"), g120_corplant_scatter, g2842_corplant_scatter,  nrow=3, common.legend = TRUE, legend="bottom", heights =  c(1,1,1) )
+plotName <- paste("D://Speciale/Data/Extra data/corplant_collected_scatter.png")
+ggsave(plotName, width = 8, height = 12)
+
+```
+
+```{r}
+#make cor plot with AAW for before and after HC
+
+genus_d_AAW_HC <- genus_d_AAW
+genus_d_AAW_HC <- within(genus_d_AAW_HC, Plant[Date <= "2020-01-01"] <- "Aalborg West before S::Select")
+genus_d_AAW_HC <- within(genus_d_AAW_HC, Plant[Date >= "2020-01-01"] <- "Aalborg West after S::Select")
+
+genus_d_AAW_HCb <- subset(genus_d_AAW_HC, Plant == "Aalborg West before S::Select")
+genus_list_AAW_HCb <- split(genus_d_AAW_HCb, genus_d_AAW_HCb$Phylum.Genus)
+keep_rows <- sapply(genus_list_AAW_HCb, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_AAW_HCb <- genus_list_AAW_HCb[keep_rows]
+
+genus_d_AAW_HCa <- subset(genus_d_AAW_HC, Plant == "Aalborg West after S::Select")
+genus_list_AAW_HCa <- split(genus_d_AAW_HCa, genus_d_AAW_HCa$Phylum.Genus)
+keep_rows <- sapply(genus_list_AAW_HCa, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_AAW_HCa <- genus_list_AAW_HCa[keep_rows]
+
+
+
+#Test for normal distribution
+genus_AAW_HCb_shapiro_DSVI <- lapply(genus_list_AAW_HCb, shapiro_fun, col = "DSVI")
+genus_AAW_HCb_shapiro_DSVI <- lapply(genus_list_AAW_HCb, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_AAW_HCb_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_AAW_HCb_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_AAW_HCb[names(genus_list_AAW_HCb) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_AAW_HCb[!names(genus_list_AAW_HCb) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+AAW_HCbCorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  AAW_HCbSigCor_DSVI <- do.call(rbind, AAW_HCbCorDSVI_result_list)
+  AAW_HCbSigCor_DSVI <- as.data.frame(AAW_HCbSigCor_DSVI)
+  AAW_HCbSigCor_DSVI <- cbind(rownames(AAW_HCbSigCor_DSVI), data.frame(AAW_HCbSigCor_DSVI, row.names=NULL))
+  names(AAW_HCbSigCor_DSVI)[1] <- "Genus"
+  AAW_HCbSigCor_DSVI <- AAW_HCbSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  AAW_HCbSigCor_DSVI$p.value <- as.numeric(AAW_HCbSigCor_DSVI$p.value)
+   AAW_HCbSigCor_DSVI$estimate <- as.numeric(AAW_HCbSigCor_DSVI$estimate)
+  AAW_HCbSigCor_DSVI$p.value <- round(AAW_HCbSigCor_DSVI$p.value, digits = 3)
+  AAW_HCbSigCor_DSVI <- subset(AAW_HCbSigCor_DSVI, AAW_HCbSigCor_DSVI$p.value < 0.05)
+names(AAW_HCbSigCor_DSVI)[3] <- "CorCoef"
+AAW_HCbSigCor_DSVI$CorTest <- "spearman"
+##Correlation to DSVI (normal distribution)
+pearsonAAW_HCbCorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonAAW_HCbSigCor_DSVI <- do.call(rbind, pearsonAAW_HCbCorDSVI_result_list)
+  pearsonAAW_HCbSigCor_DSVI <- as.data.frame(pearsonAAW_HCbSigCor_DSVI)
+  pearsonAAW_HCbSigCor_DSVI <- cbind(rownames(pearsonAAW_HCbSigCor_DSVI), data.frame(pearsonAAW_HCbSigCor_DSVI, row.names=NULL))
+  names(pearsonAAW_HCbSigCor_DSVI)[1] <- "Genus"
+  pearsonAAW_HCbSigCor_DSVI <- pearsonAAW_HCbSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonAAW_HCbSigCor_DSVI$p.value <- as.numeric(pearsonAAW_HCbSigCor_DSVI$p.value)
+   pearsonAAW_HCbSigCor_DSVI$estimate <- as.numeric(pearsonAAW_HCbSigCor_DSVI$estimate)
+  pearsonAAW_HCbSigCor_DSVI$p.value <- round(pearsonAAW_HCbSigCor_DSVI$p.value, digits = 3)
+  pearsonAAW_HCbSigCor_DSVI <- subset(pearsonAAW_HCbSigCor_DSVI, pearsonAAW_HCbSigCor_DSVI$p.value < 0.05)
+names(pearsonAAW_HCbSigCor_DSVI)[3] <- "CorCoef"
+pearsonAAW_HCbSigCor_DSVI$CorTest <- "Pearson"
+
+AAW_HCbSigCor_DSVI <- rbind(AAW_HCbSigCor_DSVI, pearsonAAW_HCbSigCor_DSVI)
+AAW_HCbSigCor_DSVI$Plant <- "Aalborg West before S::Select"
+
+
+
+
+#Test for normal distribution
+genus_AAW_HCa_shapiro_DSVI <- lapply(genus_list_AAW_HCa, shapiro_fun, col = "DSVI")
+genus_AAW_HCa_shapiro_DSVI <- lapply(genus_list_AAW_HCa, shapiro_fun, col = "Sum")
+test_DSVI <- lapply(genus_AAW_HCa_shapiro_DSVI, function(df) {
+  df$p.value > 0.05
+})
+extracted_elements <- genus_AAW_HCa_shapiro_DSVI[which(unlist(test_DSVI))]
+#NO ELEMENTS IN LIST MEANS NO NORMALLY DISTRIBUTED DATA FOR ANY GENERA 
+normaldist_subset <- genus_list_AAW_HCa[names(genus_list_AAW_HCa) %in% names(extracted_elements)]
+notnormaldist_subset <- genus_list_AAW_HCa[!names(genus_list_AAW_HCa) %in% names(extracted_elements)]
+##Correlation to DSVI (not normal distribution)
+AAW_HCaCorDSVI_result_list <- lapply(notnormaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "spearman", exact=FALSE)
+})
+  AAW_HCaSigCor_DSVI <- do.call(rbind, AAW_HCaCorDSVI_result_list)
+  AAW_HCaSigCor_DSVI <- as.data.frame(AAW_HCaSigCor_DSVI)
+  AAW_HCaSigCor_DSVI <- cbind(rownames(AAW_HCaSigCor_DSVI), data.frame(AAW_HCaSigCor_DSVI, row.names=NULL))
+  names(AAW_HCaSigCor_DSVI)[1] <- "Genus"
+  AAW_HCaSigCor_DSVI <- AAW_HCaSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  AAW_HCaSigCor_DSVI$p.value <- as.numeric(AAW_HCaSigCor_DSVI$p.value)
+   AAW_HCaSigCor_DSVI$estimate <- as.numeric(AAW_HCaSigCor_DSVI$estimate)
+  AAW_HCaSigCor_DSVI$p.value <- round(AAW_HCaSigCor_DSVI$p.value, digits = 3)
+  AAW_HCaSigCor_DSVI <- subset(AAW_HCaSigCor_DSVI, AAW_HCaSigCor_DSVI$p.value < 0.05)
+names(AAW_HCaSigCor_DSVI)[3] <- "CorCoef"
+AAW_HCaSigCor_DSVI$CorTest <- "spearman"
+##Correlation to DSVI (normal distribution)
+pearsonAAW_HCaCorDSVI_result_list <- lapply(normaldist_subset, function(df) {
+  cor.test(df[, "Sum"], df[, "DSVI"], method = "pearson", exact=FALSE)
+})
+ pearsonAAW_HCaSigCor_DSVI <- do.call(rbind, pearsonAAW_HCaCorDSVI_result_list)
+  pearsonAAW_HCaSigCor_DSVI <- as.data.frame(pearsonAAW_HCaSigCor_DSVI)
+  pearsonAAW_HCaSigCor_DSVI <- cbind(rownames(pearsonAAW_HCaSigCor_DSVI), data.frame(pearsonAAW_HCaSigCor_DSVI, row.names=NULL))
+  names(pearsonAAW_HCaSigCor_DSVI)[1] <- "Genus"
+  pearsonAAW_HCaSigCor_DSVI <- pearsonAAW_HCaSigCor_DSVI[, c("Genus", "p.value", "estimate")]
+  pearsonAAW_HCaSigCor_DSVI$p.value <- as.numeric(pearsonAAW_HCaSigCor_DSVI$p.value)
+   pearsonAAW_HCaSigCor_DSVI$estimate <- as.numeric(pearsonAAW_HCaSigCor_DSVI$estimate)
+  pearsonAAW_HCaSigCor_DSVI$p.value <- round(pearsonAAW_HCaSigCor_DSVI$p.value, digits = 3)
+  pearsonAAW_HCaSigCor_DSVI <- subset(pearsonAAW_HCaSigCor_DSVI, pearsonAAW_HCaSigCor_DSVI$p.value < 0.05)
+names(pearsonAAW_HCaSigCor_DSVI)[3] <- "CorCoef"
+pearsonAAW_HCaSigCor_DSVI$CorTest <- "Pearson"
+
+AAW_HCaSigCor_DSVI <- rbind(AAW_HCaSigCor_DSVI, pearsonAAW_HCaSigCor_DSVI)
+AAW_HCaSigCor_DSVI$Plant <- "Aalborg West after S::Select"
+
+#gather correlation coeffs and make plot
+Total_cor <- rbind(AAWSigCor_DSVI, AAW_HCbSigCor_DSVI, AAW_HCaSigCor_DSVI)
+Total_cor <- Total_cor[order(Total_cor$CorCoef,decreasing=TRUE),]
+filt_0.5_Total_cor <- subset(Total_cor, Total_cor$CorCoef > 0.5 |Total_cor$CorCoef < -0.5)
+filt_Total_Cor <- subset(Total_cor, Genus %in% filt_0.5_Total_cor$Genus)
+
+genus_count <- n_distinct(filt_Total_Cor$Genus)
+
+Cor_Heatmap <- ggplot(filt_Total_Cor, aes(x=Plant,y = reorder(Genus, CorCoef), fill= CorCoef)) + 
+  geom_tile()+
+  scale_fill_gradient2(low = "#075AFF",
+                       mid = "#FFFFCC",
+                       high = "#FF0000") +
+  theme(axis.text.x = element_text(angle = 90))+
+ geom_text(aes(label = round(CorCoef, digits = 2)), color = "black", size = 3)+
+  theme(legend.position = "top")+
+  labs(fill="Correlation Coefficient", y="Genus")
+Cor_Heatmap
+plotName <- paste("D://Speciale/Data/Extra data/cor_heatmap_AAWHC.png")
+ggsave(plotName, width = 6, height = 10)
+```
+
+```{r}
+genus_list_DSVI <- split(genus_d_DSVI, genus_d_DSVI$Genus)
+#Remove genera if all samples are less than 0.1 abund
+keep_rows <- sapply(genus_list_DSVI, function(df) any(df[, "Sum"] >= 0.1))
+genus_list_DSVI <- genus_list_DSVI[keep_rows]
+
+# Find the maximum number of rows in the "Sample" column among all dataframes
+max_rows <- max(sapply(genus_list_DSVI, function(df) length(df$Sample)))
+
+# Create an empty dataframe with the correct number of rows
+merged_genus <- data.frame(Sample = character(max_rows), stringsAsFactors = FALSE)
+
+# Loop through each dataframe in the list
+for (df_name in names(genus_list_DSVI)) {
+  # Extract the Sum column from the current dataframe
+  sum_column <- genus_list_DSVI[[df_name]]$Sum
+  
+  # Add the Sum column to the merged_df with a column name based on the dataframe name
+  merged_genus[[df_name]] <- sum_column
+}
+merged_genus <- merged_genus[,-1]
+
+g_interest <- unique(c(g_Fila$Genus, g_PAO$Genus, g_NOB$Genus, g_GAO$Genus))
+# Calculate average for each column in merged_df
+avg <- colMeans(merged_genus)
+# Sort average values in descending order
+sorted_avg <- sort(avg, decreasing = TRUE)
+# Get column names of top 100 average values
+top_50_cols <- names(sorted_avg[1:50])
+top_50_cols <- top_50_cols[!top_50_cols %in% levels(g_interest)]
+top_50_cols  <- top_50_cols[1:22]
+g_interest <- c(as.character(g_interest), top_50_cols)
+#g_interest <- unique(g_interest)
+# Subset merged_df to keep only the top 100 columns
+merged_interest <- merged_genus[, colnames(merged_genus) %in% g_interest]
+merged_interest <- cbind(genus_list_DSVI$g__AAP99$DSVI, merged_interest)
+names(merged_interest)[1] <- "DSVI" 
+
+
+# Load the reshape2 package
+library(reshape2)
+
+# Create a correlation matrix
+correlation_matrix <- cor(merged_interest, method = "spearman")
+
+# Convert correlation matrix to dataframe
+correlation_df <- as.data.frame(correlation_matrix)
+
+# Convert correlation dataframe to long format using gather()
+correlation_df_long <- correlation_df %>%
+  rownames_to_column("Var1") %>%
+  gather(key = "Var2", value = "value", -Var1) %>%
+  na.omit()
+
+g_interest <- c("DSVI", g_interest)
+correlation_df_long$Var1 <- factor(correlation_df_long$Var1, levels= g_interest)
+correlation_df_long$Var2 <- factor(correlation_df_long$Var2, levels= g_interest)
+
+# Create heatmap using ggplot2
+genus_cor_heatmap <- ggplot(correlation_df_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue", "white", "red"))(256), na.value = "gray") +
+  theme_minimal() +
+  labs(title = "Correlation of Genus Abundance")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+genus_cor_heatmap
+plotName <- paste("D://Speciale/Data/Extra data/genus_cor_heatmap.png")
+ggsave(plotName, width = 10, height = 9)
+```
+
+
+
+
+
+```{r}
+#AAE
+# Find the maximum number of rows in the "Sample" column among all dataframes
+max_rows <- max(sapply(genus_list_AAE, function(df) length(df$Sample)))
+
+# Create an empty dataframe with the correct number of rows
+merged_genus <- data.frame(Sample = character(max_rows), stringsAsFactors = FALSE)
+
+# Loop through each dataframe in the list
+for (df_name in names(genus_list_AAE)) {
+  # Extract the Sum column from the current dataframe
+  sum_column <- genus_list_AAE[[df_name]]$Sum
+  
+  # Add the Sum column to the merged_df with a column name based on the dataframe name
+  merged_genus[[df_name]] <- sum_column
+}
+merged_genus <- merged_genus[,-1]
+
+g_interest <- unique(c(g_Fila$Phylum.Genus, g_PAO$Phylum.Genus, g_NOB$Phylum.Genus, g_GAO$Phylum.Genus))
+
+#Initialize a vector to store the matched column names
+matched_cols <- character(length(top_100_cols))
+# Loop through top_50_cols and match partial column names
+for (i in seq_along(top_50_cols)) {
+  matched_col <- colnames(merged_genus)[grep(top_100_cols[i], colnames(merged_genus))]
+  matched_cols[i] <- ifelse(length(matched_col) > 0, matched_col, NA)
+}
+# Filter out empty entries and limit to 22 entries
+top_22_genus <- na.omit(matched_cols)[1:50]
+
+g_interest <- unique(c(as.character(g_interest), top_22_genus))
+#g_interest <- g_interest[1:50]
+# Subset merged_df to keep only the top 100 columns
+merged_interest <- merged_genus[, colnames(merged_genus) %in% g_interest]
+merged_interest <- cbind(genus_list_AAE$`p__Abditibacteriota,g__Abditibacterium`$DSVI, merged_interest)
+names(merged_interest)[1] <- "DSVI" 
+
+
+# Load the reshape2 package
+library(reshape2)
+
+# Create a correlation matrix
+correlation_matrix <- cor(merged_interest, method = "spearman")
+
+# Convert correlation matrix to dataframe
+correlation_df <- as.data.frame(correlation_matrix)
+
+# Convert correlation dataframe to long format using gather()
+correlation_df_long <- correlation_df %>%
+  rownames_to_column("Var1") %>%
+  gather(key = "Var2", value = "value", -Var1) %>%
+  na.omit()
+
+g_interest <- c("DSVI", g_interest)
+
+correlation_df_long$Var1 <- factor(correlation_df_long$Var1, levels= g_interest)
+correlation_df_long$Var2 <- factor(correlation_df_long$Var2, levels= g_interest)
+
+# Create heatmap using ggplot2
+genus_cor_heatmap <- ggplot(correlation_df_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue", "white", "red"))(256), na.value = "gray") +
+  theme_minimal() +
+  labs(title = "Spearman Correlation of Genus Abundance (and DSVI) in Aalborg East WWTP")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+genus_cor_heatmap
+plotName <- paste("D://Speciale/Data/Extra data/genus_cor_heatmapAAE.png")
+ggsave(plotName, width = 10, height = 9)
+```
+```{r}
+#AAW
+# Find the maximum number of rows in the "Sample" column among all dataframes
+max_rows <- max(sapply(genus_list_AAW, function(df) length(df$Sample)))
+
+# Create an empty dataframe with the correct number of rows
+merged_genus <- data.frame(Sample = character(max_rows), stringsAsFactors = FALSE)
+
+# Loop through each dataframe in the list
+for (df_name in names(genus_list_AAW)) {
+  # Extract the Sum column from the current dataframe
+  sum_column <- genus_list_AAW[[df_name]]$Sum
+  
+  # Add the Sum column to the merged_df with a column name based on the dataframe name
+  merged_genus[[df_name]] <- sum_column
+}
+merged_genus <- merged_genus[,-1]
+
+g_interest <- unique(c(g_Fila$Phylum.Genus, g_PAO$Phylum.Genus, g_NOB$Phylum.Genus, g_GAO$Phylum.Genus))
+
+#Initialize a vector to store the matched column names
+matched_cols <- character(length(top_100_cols))
+# Loop through top_50_cols and match partial column names
+for (i in seq_along(top_50_cols)) {
+  matched_col <- colnames(merged_genus)[grep(top_100_cols[i], colnames(merged_genus))]
+  matched_cols[i] <- ifelse(length(matched_col) > 0, matched_col, NA)
+}
+# Filter out empty entries and limit to 22 entries
+top_22_genus <- na.omit(matched_cols)[1:50]
+
+g_interest <- unique(c(as.character(g_interest), top_22_genus))
+#g_interest <- g_interest[1:50]
+# Subset merged_df to keep only the top 100 columns
+merged_interest <- merged_genus[, colnames(merged_genus) %in% g_interest]
+merged_interest <- cbind(genus_list_AAW$`p__Acidobacteriota,g__Blastocatella`$DSVI, merged_interest)
+names(merged_interest)[1] <- "DSVI" 
+
+
+# Load the reshape2 package
+library(reshape2)
+
+# Create a correlation matrix
+correlation_matrix <- cor(merged_interest, method = "spearman")
+
+# Convert correlation matrix to dataframe
+correlation_df <- as.data.frame(correlation_matrix)
+
+# Convert correlation dataframe to long format using gather()
+correlation_df_long <- correlation_df %>%
+  rownames_to_column("Var1") %>%
+  gather(key = "Var2", value = "value", -Var1) %>%
+  na.omit()
+
+g_interest <- c("DSVI", g_interest)
+
+correlation_df_long$Var1 <- factor(correlation_df_long$Var1, levels= g_interest)
+correlation_df_long$Var2 <- factor(correlation_df_long$Var2, levels= g_interest)
+
+# Create heatmap using ggplot2
+genus_cor_heatmap <- ggplot(correlation_df_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue", "white", "red"))(256), na.value = "gray") +
+  theme_minimal() +
+  labs(title = "Spearman Correlation of Genus Abundance (and DSVI) in Aalborg West WWTP")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+genus_cor_heatmap
+plotName <- paste("D://Speciale/Data/Extra data/genus_cor_heatmapAAW.png")
+ggsave(plotName, width = 10, height = 9)
+```
+
+
+```{r}
+#DAM
+# Find the maximum number of rows in the "Sample" column among all dataframes
+max_rows <- max(sapply(genus_list_DAM, function(df) length(df$Sample)))
+
+# Create an empty dataframe with the correct number of rows
+merged_genus <- data.frame(Sample = character(max_rows), stringsAsFactors = FALSE)
+
+# Loop through each dataframe in the list
+for (df_name in names(genus_list_DAM)) {
+  # Extract the Sum column from the current dataframe
+  sum_column <- genus_list_DAM[[df_name]]$Sum
+  
+  # Add the Sum column to the merged_df with a column name based on the dataframe name
+  merged_genus[[df_name]] <- sum_column
+}
+merged_genus <- merged_genus[,-1]
+
+g_interest <- unique(c(g_Fila$Phylum.Genus, g_PAO$Phylum.Genus, g_NOB$Phylum.Genus, g_GAO$Phylum.Genus))
+
+#Initialize a vector to store the matched column names
+matched_cols <- character(length(top_100_cols))
+# Loop through top_50_cols and match partial column names
+for (i in seq_along(top_50_cols)) {
+  matched_col <- colnames(merged_genus)[grep(top_100_cols[i], colnames(merged_genus))]
+  matched_cols[i] <- ifelse(length(matched_col) > 0, matched_col, NA)
+}
+# Filter out empty entries and limit to 22 entries
+top_22_genus <- na.omit(matched_cols)[1:50]
+
+g_interest <- unique(c(as.character(g_interest), top_22_genus))
+#g_interest <- g_interest[1:50]
+# Subset merged_df to keep only the top 100 columns
+merged_interest <- merged_genus[, colnames(merged_genus) %in% g_interest]
+merged_interest <- cbind(genus_list_DAM$`p__Acidobacteriota,g__Blastocatella`$DSVI, merged_interest)
+names(merged_interest)[1] <- "DSVI" 
+
+
+# Load the reshape2 package
+library(reshape2)
+
+# Create a correlation matrix
+correlation_matrix <- cor(merged_interest, method = "spearman")
+
+# Convert correlation matrix to dataframe
+correlation_df <- as.data.frame(correlation_matrix)
+
+# Convert correlation dataframe to long format using gather()
+correlation_df_long <- correlation_df %>%
+  rownames_to_column("Var1") %>%
+  gather(key = "Var2", value = "value", -Var1) %>%
+  na.omit()
+
+g_interest <- c("DSVI", g_interest)
+
+correlation_df_long$Var1 <- factor(correlation_df_long$Var1, levels= g_interest)
+correlation_df_long$Var2 <- factor(correlation_df_long$Var2, levels= g_interest)
+
+# Create heatmap using ggplot2
+genus_cor_heatmap <- ggplot(correlation_df_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue", "white", "red"))(256), na.value = "gray") +
+  theme_minimal() +
+  labs(title = "Spearman Correlation of Genus Abundance (and DSVI) in Damhusåen WWTP")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+genus_cor_heatmap
+plotName <- paste("D://Speciale/Data/Extra data/genus_cor_heatmapDAM.png")
+ggsave(plotName, width = 10, height = 9)
+```
+
+
+
+```{r}
+#MAR
+# Find the maximum number of rows in the "Sample" column among all dataframes
+max_rows <- max(sapply(genus_list_MAR, function(df) length(df$Sample)))
+
+# Create an empty dataframe with the correct number of rows
+merged_genus <- data.frame(Sample = character(max_rows), stringsAsFactors = FALSE)
+
+# Loop through each dataframe in the list
+for (df_name in names(genus_list_MAR)) {
+  # Extract the Sum column from the current dataframe
+  sum_column <- genus_list_MAR[[df_name]]$Sum
+  
+  # Add the Sum column to the merged_df with a column name based on the dataframe name
+  merged_genus[[df_name]] <- sum_column
+}
+merged_genus <- merged_genus[,-1]
+
+g_interest <- unique(c(g_Fila$Phylum.Genus, g_PAO$Phylum.Genus, g_NOB$Phylum.Genus, g_GAO$Phylum.Genus))
+
+#Initialize a vector to store the matched column names
+matched_cols <- character(length(top_100_cols))
+# Loop through top_50_cols and match partial column names
+for (i in seq_along(top_50_cols)) {
+  matched_col <- colnames(merged_genus)[grep(top_100_cols[i], colnames(merged_genus))]
+  matched_cols[i] <- ifelse(length(matched_col) > 0, matched_col, NA)
+}
+# Filter out empty entries and limit to 22 entries
+top_22_genus <- na.omit(matched_cols)[1:50]
+
+g_interest <- unique(c(as.character(g_interest), top_22_genus))
+#g_interest <- g_interest[1:50]
+# Subset merged_df to keep only the top 100 columns
+merged_interest <- merged_genus[, colnames(merged_genus) %in% g_interest]
+merged_interest <- cbind(genus_list_MAR$`p__Acidobacteriota,g__Blastocatella`$DSVI, merged_interest)
+names(merged_interest)[1] <- "DSVI" 
+
+
+# Load the reshape2 package
+library(reshape2)
+
+# Create a correlation matrix
+correlation_matrix <- cor(merged_interest, method = "spearman")
+
+# Convert correlation matrix to dataframe
+correlation_df <- as.data.frame(correlation_matrix)
+
+# Convert correlation dataframe to long format using gather()
+correlation_df_long <- correlation_df %>%
+  rownames_to_column("Var1") %>%
+  gather(key = "Var2", value = "value", -Var1) %>%
+  na.omit()
+
+g_interest <- c("DSVI", g_interest)
+
+correlation_df_long$Var1 <- factor(correlation_df_long$Var1, levels= g_interest)
+correlation_df_long$Var2 <- factor(correlation_df_long$Var2, levels= g_interest)
+
+# Create heatmap using ggplot2
+genus_cor_heatmap <- ggplot(correlation_df_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c("blue", "white", "red"))(256), na.value = "gray") +
+  theme_minimal() +
+  labs(title = "Spearman Correlation of Genus Abundance (and DSVI) in Mariagerfjord WWTP")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+genus_cor_heatmap
+plotName <- paste("D://Speciale/Data/Extra data/genus_cor_heatmapMAR.png")
+ggsave(plotName, width = 10, height = 9)
+```
+
+
+
+```{r}
+# defining seasons
+spring <- data.frame(xstart=as.Date(c("2017-03-01","2018-03-01","2019-03-01","2020-03-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2017-05-31","2018-05-31","2019-05-31","2020-05-31"),format = c("%Y-%m-%d")))
+summer <- data.frame(xstart=as.Date(c("2017-06-01","2018-06-01","2019-06-01","2020-06-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2017-08-31","2018-08-31","2019-08-31","2020-08-31"),format = c("%Y-%m-%d")))
+fall <- data.frame(xstart=as.Date(c("2017-09-01","2018-09-01","2019-09-01","2020-09-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2017-11-30","2018-11-30","2019-11-30","2020-11-30"),format = c("%Y-%m-%d")))
+winter <- data.frame(xstart=as.Date(c("2017-01-01","2018-01-01","2019-01-01","2020-01-01"),format = c("%Y-%m-%d")), 
+xend=as.Date(c("2017-02-31","2018-02-31","2019-02-31","2020-02-31"),format = c("%Y-%m-%d")))
+```
+
+```{r}
+abundance <- ggplot()+
+  geom_point(data=subset(genus_d_DAM, Genus %in% "g__Ca_Microthrix"), mapping=aes(x=Date, y=Sum, color = Phylum.Genus))+
+  geom_point(data=subset(genus_d_DAM, Genus %in% "g__Ca_Amarolinea"), mapping=aes(x=Date, y=Sum, color = Phylum.Genus))+
+  geom_point(data=subset(genus_d_DAM, Genus %in% "g__Ca_Amarolinea"), mapping=aes(x=Date, y=DSVI/10, shape="DSVI"))+
+  scale_shape_manual(values=c("DSVI"=1 ))+  scale_y_continuous(  name = "Read Abundance [%]",breaks = seq(0, 40,5),
+    sec.axis = sec_axis( trans=~.*10, name="DSVI [mL/g]", breaks = seq(0, 400, 50)))+
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=summer, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#D6F1C6", color=NA) +
+  geom_rect(data=fall, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#F9CC87", color=NA) +
+  geom_rect(data=winter, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#C9F1FD", color=NA) +
+  labs(color="", shape="")+
+  theme(legend.position = "bottom")
+abundance
+g_micro<- subset(genus_d_DAM, Genus %in% "g__Ca_Microthrix")
+g_Amaro <-subset(genus_d_DAM, Genus %in% "g__Ca_Amarolinea")
+
+g_amaromicro <- merge(g_micro, g_Amaro, by = "Date")
+
+# Add the values of the two columns
+g_amaromicro$TotalAbundance <- g_amaromicro$Sum.x + g_amaromicro$Sum.y
+
+
+sum_plot <- ggplot()+
+  geom_point(g_amaromicro, mapping=aes(x=Date, y=TotalAbundance, color="Sum of Ca. Microthrix and Ca. Amarolinea"))+
+  geom_point(g_amaromicro, mapping=aes(x=Date, y=DSVI.x/10, shape="DSVI"))+
+  scale_y_continuous(  name = "Read Abundance [%]",breaks = seq(0, 40,5),
+    sec.axis = sec_axis( trans=~.*10, name="DSVI [mL/g]", breaks = seq(0, 400, 50)))+
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=spring, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#FEF8FA", color=NA) +
+  geom_rect(data=summer, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#D6F1C6", color=NA) +
+  geom_rect(data=fall, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#F9CC87", color=NA) +
+  geom_rect(data=winter, mapping=aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.3, fill="#C9F1FD", color=NA) +
+    labs(shape="", color="")+
+  theme(legend.position = "bottom")+
+  scale_shape_manual(values=c("DSVI"=1 ))+
+  scale_color_manual(values=c("Sum of Ca. Microthrix and Ca. Amarolinea"="purple"))
+abundance
+sum_plot
+ggarrange(abundance, sum_plot, nrow=2, align = "v")  
+plotName <- paste("D://Speciale/Data/Extra data/amaro_micro_DAM.png")
+ggsave(plotName, width = 8, height = 7)
+  
+```
+```{r}
+library(corrr)
+filt_0.5_Total_cor <- subset(Total_cor, Total_cor$CorCoef > 0.65 |Total_cor$CorCoef < -0.65)
+filt_Total_Cor <- subset(Total_cor, Genus %in% filt_0.5_Total_cor$Genus)
+
+
+filt_Total_Cor$Genus.pure <- sub(".*?,", "", filt_Total_Cor$Genus)
+cor_genus <- c(unique(filt_Total_Cor$Genus.pure), Filaments, PAO, GAO, NOB_AOB)
+
+d_AAW_cor_genus <- amp_subset_taxa(d_DSVI_AAW, tax_vector = cor_genus)
+d_AAW_filt <- filter_otus(d_AAW_cor_genus, filter_otus = 0.7)
+d_AAW_filt <- amp_subset_taxa(d_AAW_filt, tax_vector = c("g__midas_g_80", "g__Lentimicrobium"), remove = TRUE)
+unique(d_AAW_filt$tax$Genus)
+
+g_AAW_filt <- aggregate_abund(
+  d_AAW_filt$abund,
+  d_AAW_filt$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "abund"
+)
+g_AAW_filt <- t(g_AAW_filt)
+
+
+AAW_cormatrix <- cor(g_AAW_filt, method = "spearman")
+# Set the value of 1 to 0 in the correlation matrix
+AAW_cormatrix[AAW_cormatrix == 1] <- 0
+
+# Create a logical matrix indicating which values satisfy the condition
+condition <- abs(AAW_cormatrix) > 0.75
+
+# Extract the row names and column names where condition is TRUE
+rows <- rownames(AAW_cormatrix)[rowSums(condition) > 0]
+cols <- colnames(AAW_cormatrix)[colSums(condition) > 0]
+
+# Subset the correlation matrix based on the selected row names and column names
+AAWsubset_matrix <- AAW_cormatrix[rows, cols]
+
+library("ggrepel")
+network_plot(AAWsubset_matrix,
+  min_cor = 0.65,
+  legend = c("full", "range", "none"),
+  colours = c("blue","white", "red"),
+  repel = TRUE,
+  curved =TRUE)+
+  geom_curve(linewidth=0.001, alpha=0.7)+
+  geom_text_repel(max.overlaps=1)+
+  ggtitle("Aalborg West")+
+  theme(plot.title = element_text(size = 22))
+plotName <- paste("D://Speciale/Data/Extra data/AAW_network.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+
+
+
+d_DAM_cor_genus <- amp_subset_taxa(d_DSVI_DAM, tax_vector = cor_genus)
+d_DAM_filt <- filter_otus(d_DAM_cor_genus, filter_otus = 0.3)
+unique(d_DAM_filt$tax$Genus)
+
+g_DAM_filt <- aggregate_abund(
+  d_DAM_filt$abund,
+  d_DAM_filt$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "abund"
+)
+g_DAM_filt <- t(g_DAM_filt)
+
+
+DAM_cormatrix <- cor(g_DAM_filt, method = "spearman")
+# Set the value of 1 to 0 in the correlation matrix
+DAM_cormatrix[DAM_cormatrix == 1] <- 0
+
+# Create a logical matrix indicating which values satisfy the condition
+condition <- abs(DAM_cormatrix) > 0.7
+
+# Extract the row names and column names where condition is TRUE
+rows <- rownames(DAM_cormatrix)[rowSums(condition) > 0]
+cols <- colnames(DAM_cormatrix)[colSums(condition) > 0]
+
+# Subset the correlation matrix based on the selected row names and column names
+DAMsubset_matrix <- DAM_cormatrix[rows, cols]
+
+library("ggrepel")
+network_plot(DAMsubset_matrix,
+  min_cor = 0.65,
+  legend = c("full", "range", "none"),
+  colours = c("blue","white", "red"),
+  repel = TRUE,
+  curved =TRUE)+
+  geom_curve(linewidth=0.001, alpha=0.7)+
+  geom_text_repel(max.overlaps=1)+
+  ggtitle("Damhusåen")+
+  theme(plot.title = element_text(size = 22))
+plotName <- paste("D://Speciale/Data/Extra data/DAM_network.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+
+
+d_AAE_cor_genus <- amp_subset_taxa(d_DSVI_AAE, tax_vector = cor_genus)
+d_AAE_filt <- filter_otus(d_AAE_cor_genus, filter_otus = 0.3)
+unique(d_AAE_filt$tax$Genus)
+
+g_AAE_filt <- aggregate_abund(
+  d_AAE_filt$abund,
+  d_AAE_filt$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "abund"
+)
+g_AAE_filt <- t(g_AAE_filt)
+
+
+AAE_cormatrix <- cor(g_AAE_filt, method = "spearman")
+# Set the value of 1 to 0 in the correlation matrix
+AAE_cormatrix[AAE_cormatrix == 1] <- 0
+
+# Create a logical matrix indicating which values satisfy the condition
+condition <- abs(AAE_cormatrix) > 0.7
+
+# Extract the row names and column names where condition is TRUE
+rows <- rownames(AAE_cormatrix)[rowSums(condition) > 0]
+cols <- colnames(AAE_cormatrix)[colSums(condition) > 0]
+
+# Subset the correlation matrix based on the selected row names and column names
+AAEsubset_matrix <- AAE_cormatrix[rows, cols]
+
+library("ggrepel")
+network_plot(AAEsubset_matrix,
+  min_cor = 0.65,
+  legend = c("full", "range", "none"),
+  colours = c("blue","white", "red"),
+  repel = TRUE,
+  curved =TRUE)+
+  geom_curve(linewidth=0.001, alpha=0.7)+
+  geom_text_repel(max.overlaps=1)+
+  ggtitle("Aalborg East")+
+  theme(plot.title = element_text(size = 22))
+plotName <- paste("D://Speciale/Data/Extra data/AAE_network.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+
+
+
+d_MAR_cor_genus <- amp_subset_taxa(d_DSVI_MAR, tax_vector = cor_genus)
+d_MAR_filt <- filter_otus(d_MAR_cor_genus, filter_otus = 0.3)
+unique(d_MAR_filt$tax$Genus)
+
+g_MAR_filt <- aggregate_abund(
+  d_MAR_filt$abund,
+  d_MAR_filt$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "abund"
+)
+g_MAR_filt <- t(g_MAR_filt)
+
+
+MAR_cormatrix <- cor(g_MAR_filt, method = "spearman")
+# Set the value of 1 to 0 in the correlation matrix
+MAR_cormatrix[MAR_cormatrix == 1] <- 0
+
+# Create a logical matrix indicating which values satisfy the condition
+condition <- abs(MAR_cormatrix) > 0.7
+
+# Extract the row names and column names where condition is TRUE
+rows <- rownames(MAR_cormatrix)[rowSums(condition) > 0]
+cols <- colnames(MAR_cormatrix)[colSums(condition) > 0]
+
+# Subset the correlation matrix based on the selected row names and column names
+MARsubset_matrix <- MAR_cormatrix[rows, cols]
+
+library("ggrepel")
+network_plot(MARsubset_matrix,
+  min_cor = 0.65,
+  legend = c("full", "range", "none"),
+  colours = c("blue","white", "red"),
+  repel = TRUE,
+  curved =TRUE)+
+  geom_curve(linewidth=0.001, alpha=0.7)+
+  geom_text_repel(max.overlaps=1)+
+  ggtitle("Mariagerfjord")+
+  theme(plot.title = element_text(size = 22))
+plotName <- paste("D://Speciale/Data/Extra data/MAR_network.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+
+d_cor_genus <- amp_subset_taxa(d_DSVI, tax_vector = cor_genus)
+d_filt <- filter_otus(d_cor_genus, filter_otus = 0.1)
+unique(d_MAR_filt$tax$Genus)
+
+g_filt <- aggregate_abund(
+  d_filt$abund,
+  d_filt$tax,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  calcSums = TRUE,
+  format = "abund"
+)
+g_filt <- t(g_filt)
+
+
+cormatrix <- cor(g_filt, method = "spearman")
+# Set the value of 1 to 0 in the correlation matrix
+cormatrix[cormatrix == 1] <- 0
+
+# Create a logical matrix indicating which values satisfy the condition
+condition <- abs(cormatrix) > 0.75
+
+# Extract the row names and column names where condition is TRUE
+rows <- rownames(cormatrix)[rowSums(condition) > 0]
+cols <- colnames(cormatrix)[colSums(condition) > 0]
+
+# Subset the correlation matrix based on the selected row names and column names
+subset_matrix <- cormatrix[rows, cols]
+
+library("ggrepel")
+network_plot(subset_matrix,
+  min_cor = 0.65,
+  legend = c("full", "range", "none"),
+  colours = c("blue","white", "red"),
+  repel = TRUE,
+  curved =TRUE)+
+  geom_curve(linewidth=0.001, alpha=0.7)+
+  geom_text_repel(max.overlaps=1)+
+  ggtitle("Total")+
+  theme(plot.title = element_text(size = 22))
+plotName <- paste("D://Speciale/Data/Extra data/network.png")
+ggsave(plotName, width = 10, height = 8)
+
+
+```
+
