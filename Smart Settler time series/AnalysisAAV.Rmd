@@ -1,0 +1,593 @@
+---
+title: "Broad_investigation_collected"
+author: "Vibeke S. Nielsen"
+date: "2022-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Save file to
+```{r}
+path_out<- "D://Speciale/Data/Time_series/"
+fileName <- paste(path_out, "AnalysisAAV", sep = "")
+```
+
+
+
+#Install packages
+```{r}
+library(data.table)
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(ggpubr)
+
+```
+
+
+
+#Loading data
+
+```{r}
+Parameters <- read.csv( "D://Speciale/Data/Time_series/AAV_parameters.csv")
+Parameters<-Parameters[,c("Date","Dilution.percent","n","SS","Velocity","velocity.slope", "Velocity.intercept","SV30.intercept","SV30.slope","SV30","DSVI")]
+Parameters <- Parameters[order(as.Date(Parameters$Date, format="%d.%m.%Y")),]
+Parameters$Date <-as.Date(Parameters$Date, format = "%d.%m.%Y")
+Parameters$Concentration <- 
+      Parameters$SS * Parameters$Dilution.percent / 100
+Parameters$NewVelocity <- Parameters$Velocity/1000*3600
+Parameters$Equipment <- "Smart Settler"
+#correct for overfull volume
+Parameters$SV30 <- Parameters$SV30/1.078
+Parameters$DSVI <- Parameters$SV30*Parameters$n/Parameters$SS
+
+
+stats <- read.csv( "D://Speciale/Data/Udstyrstest/StatsRedo.csv")
+
+AAV_metadata= read_excel("D://Speciale/Data/Time_series/Aalborg Vest metadata.xlsx", col_types = c( "date", "numeric","numeric","numeric", "numeric","numeric","numeric"))
+# Replace NA values in column DSV with values from SV
+AAV_metadata$DSV <- ifelse(is.na(AAV_metadata$DSV), AAV_metadata$SV, AAV_metadata$DSV)
+AAV_metadata$DSVI <- ifelse(is.na(AAV_metadata$DSVI), AAV_metadata$SVI, AAV_metadata$DSVI)
+AAV_metadata[,5] <- AAV_metadata[,5]/10
+AAV_metadata$Equipment <- "Standard Method"
+
+
+Parameters_Vsub <- subset(Parameters, n== 1)
+Parameters_Vsubsb <- Parameters_Vsub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "NewVelocity")]
+Parameters_Vsubsb$Parameter <- "v_hs [m/h]"
+Parameters_Vsubsb$Equipment <- "Smart Settler"
+names(Parameters_Vsubsb)[6] <- "Value"
+names(Parameters_Vsubsb)[5] <- "Diluted SS"
+
+Parameters_svisub <- subset(Parameters, n== 1)
+Parameters_svisub <- Parameters_svisub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "DSVI")]
+Parameters_svisub$Equipment <- "Smart Settler"
+Parameters_svisub$Parameter <- "SVI [mL/g]"
+names(Parameters_svisub)[6] <- "Value"
+names(Parameters_svisub)[5] <- "Diluted SS"
+
+Parameters_dsvisub <- rbind(Parameters[1:16,] ,Parameters[!Parameters$n == "1", ])
+Parameters_dsvisub <- Parameters_dsvisub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "DSVI")]
+Parameters_dsvisub$Equipment <- "Smart Settler"
+Parameters_dsvisub$Parameter <- "DSVI [mL/g]"
+names(Parameters_dsvisub)[6] <- "Value"
+names(Parameters_dsvisub)[5] <- "Diluted SS"
+
+Parameters_sv30sub <- rbind(Parameters[1:16,] ,Parameters[!Parameters$n == "1", ])
+Parameters_sv30sub <- Parameters_sv30sub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "SV30")]
+Parameters_sv30sub$Equipment <- "Smart Settler"
+Parameters_sv30sub$Parameter <- "DSV [mL/L]"
+names(Parameters_sv30sub)[6] <- "Value"
+names(Parameters_sv30sub)[5] <- "Diluted SS"
+#Parameters_dsv30sub <- Parameters_sv30sub[17:22,]
+
+#Parameters_sv30sub <- subset(Parameters, n== 1)
+#Parameters_sv30sub <- Parameters_sv30sub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "SV30")]
+#Parameters_sv30sub$Equipment <- "Smart Settler"
+#Parameters_sv30sub$Parameter <- "SV30 [mL/L]"
+#names(Parameters_sv30sub)[6] <- "Value"
+#names(Parameters_sv30sub)[5] <- "Diluted concentration"
+
+Parameters_Csub <- rbind(Parameters[1:16,] ,Parameters[!Parameters$n == "1", ])
+Parameters_Csub<- Parameters[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "SS")]
+Parameters_Csub$Equipment <- "Standard Method"
+Parameters_Csub$Parameter <- "SS [g/L]"
+names(Parameters_Csub)[6] <- "Value"
+names(Parameters_Csub)[5] <- "Diluted SS"
+
+
+Parameters_dilsub <- Parameters_dsvisub[,c("Date", "Dilution.percent", "n", "SS", "Diluted SS", "Dilution.percent")]
+Parameters_dilsub$Equipment <- "Standard Method"
+Parameters_dilsub$Parameter <- "Sample dilution [mL/1000mL]"
+names(Parameters_dilsub)[6] <- "Value"
+Parameters_dilsub$Value <- Parameters_dilsub$Value*10
+
+manual_measuresSVI <-AAV_metadata[,c("Dato", "D", "SS", "SVI")]
+names(manual_measuresSVI)[1] <- "Date"
+names(manual_measuresSVI)[2] <- "Dilution.percent"
+names(manual_measuresSVI)[4] <- "Value"
+manual_measuresSVI$Parameter <- "SVI [mL/g]"
+manual_measuresSVI$Dilution.percent <- ifelse(is.na(manual_measuresSVI$Dilution.percent), 100, manual_measuresSVI$Dilution.percent)
+manual_measuresSVI$n <- 100/manual_measuresSVI$Dilution.percent
+manual_measuresSVI$Equipment <- "Standard Method"
+manual_measuresSVI$Concentration <- 
+      manual_measuresSVI$SS * manual_measuresSVI$Dilution.percent / 100
+names(manual_measuresSVI)[8] <- "Diluted SS"
+ref_names <- names(Parameters_dsvisub)
+manual_measuresSVI <- manual_measuresSVI[, ref_names]
+
+manual_measuresDSVI <-AAV_metadata[,c("Dato", "D", "SS", "DSVI")]
+names(manual_measuresDSVI)[1] <- "Date"
+names(manual_measuresDSVI)[2] <- "Dilution.percent"
+names(manual_measuresDSVI)[4] <- "Value"
+manual_measuresDSVI$Parameter <- "DSVI [mL/g]"
+manual_measuresDSVI$Dilution.percent <- ifelse(is.na(manual_measuresDSVI$Dilution.percent), 100, manual_measuresDSVI$Dilution.percent)
+manual_measuresDSVI$n <- 100/manual_measuresDSVI$Dilution.percent
+manual_measuresDSVI$Equipment <- "Standard Method"
+manual_measuresDSVI$Concentration <- 
+      manual_measuresDSVI$SS * manual_measuresDSVI$Dilution.percent / 100
+names(manual_measuresDSVI)[8] <- "Diluted SS"
+ref_names <- names(Parameters_dsvisub)
+manual_measuresDSVI <- manual_measuresDSVI[, ref_names]
+#manual_measuresDSVI <- manual_measuresDSVI[23:29,]
+
+manual_measuresSV30 <-AAV_metadata[,c("Dato", "D", "SS", "DSV")]
+names(manual_measuresSV30)[1] <- "Date"
+names(manual_measuresSV30)[2] <- "Dilution.percent"
+names(manual_measuresSV30)[4] <- "Value"
+manual_measuresSV30$Parameter <- "DSV [mL/L]"
+manual_measuresSV30$Dilution.percent <- ifelse(is.na(manual_measuresSV30$Dilution.percent), 100, manual_measuresSV30$Dilution.percent)
+manual_measuresSV30$n <- 100/manual_measuresSV30$Dilution.percent
+manual_measuresSV30$Equipment <- "Standard Method"
+manual_measuresSV30$Concentration <- 
+      manual_measuresSV30$SS * manual_measuresSV30$Dilution.percent / 100
+names(manual_measuresSV30)[8] <- "Diluted SS"
+ref_names <- names(Parameters_dsvisub)
+manual_measuresSV30 <- manual_measuresSV30[, ref_names]
+#manual_measuresDSV30 <- manual_measuresSV30[23:29,]
+
+#manual_measuresSV30 <-AAV_metadata[,c("Dato", "D", "SS", "SV")]
+#names(manual_measuresSV30)[1] <- "Date"
+#names(manual_measuresSV30)[2] <- "Dilution.percent"
+#names(manual_measuresSV30)[4] <- "Value"
+#manual_measuresSV30$Parameter <- "SV30 [mL/L]"
+#manual_measuresSV30$Dilution.percent <- ifelse(is.na(manual_measuresSV30$Dilution.percent), 100, #manual_measuresSV30$Dilution.percent)
+#manual_measuresSV30$n <- 100/manual_measuresSV30$Dilution.percent
+#manual_measuresSV30$Equipment <- "Manual"
+#manual_measuresSV30$Concentration <- 
+#      manual_measuresSV30$SS * manual_measuresSV30$Dilution.percent / 100
+#names(manual_measuresSV30)[8] <- "Diluted concentration"
+#ref_names <- names(Parameters_dsvisub)
+#manual_measuresSV30 <- manual_measuresSV30[, ref_names]
+
+Parameters <- rbind(Parameters_Vsubsb, Parameters_dsvisub, Parameters_sv30sub, manual_measuresDSVI, manual_measuresSV30, Parameters_Csub, Parameters_dilsub)
+#Parameters <- rbind(Parameters_Vsubsb, Parameters_dsvisub, Parameters_sv30sub, manual_measuresDSVI, manual_measuresSV30, Parameters_Csub, Parameters_dilsub, Parameters_svisub, manual_measuresSVI, manual_measuresDSV30,Parameters_dsv30sub)
+p <- unique(Parameters$Parameter)
+Parameters$Parameter <- factor(Parameters$Parameter, levels = c( "DSVI [mL/g]", "DSV [mL/L]", "Sample dilution [mL/1000mL]", "SS [g/L]" ,"v_hs [m/h]", "Diluted SS [g/L]"))
+
+
+```
+
+
+
+
+```{r}
+plot <- ggplot()+ 
+    geom_line(data =  Parameters,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, color=Parameter, linetype=Equipment)) + 
+  geom_point(data =  Parameters,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, color=Parameter)) +
+  
+  facet_wrap(~Parameter, ncol = 1,  scales = "free_y") +
+ 
+   geom_errorbar(data = subset(Parameters, Parameter == "v_hs [m/h]"),  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, ymin=Value-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"], ymax=Value+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"])) +
+  
+  geom_errorbar(data = subset(Parameters, Parameter == "DSVI [mL/g]" & Equipment=="Smart Settler"),  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, ymin=Value-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"], ymax=Value+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"])) +
+   geom_errorbar(data = subset(Parameters, Parameter == "DSVI [mL/g]" & Equipment=="Standard Method"),  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, ymin=Value-1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="DSVI"], ymax=Value+1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="DSVI"])) +
+  
+    geom_errorbar(data = subset(Parameters, Parameter == "DSV [mL/L]" & Equipment=="Smart Settler"),  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, ymin=Value-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="SV30"], ymax=Value+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="SV30"])) +
+   geom_errorbar(data = subset(Parameters, Parameter == "DSV [mL/L]" & Equipment=="Manuel"),  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = Value, ymin=Value-1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="SV30"], ymax=Value+1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="SV30"])) +
+  scale_x_date(date_breaks="month",date_labels = "%d %b")+
+  labs(x = "Date", y = "", title = "Aalborg West")+
+  guides(colour = "none")+
+  theme(legend.position = "bottom")
+plot
+plotName <- paste("D://Speciale/Data/Time_series/AAV_plots.png")
+ggsave(plotName, width = 6, height = 10)
+```
+
+
+```{r}
+manual_measuresSVI <-AAV_metadata[,c("Dato", "D", "SS", "SVI")]
+names(manual_measuresSVI)[1] <- "Date"
+names(manual_measuresSVI)[2] <- "Dilution.percent"
+names(manual_measuresSVI)[4] <- "Value"
+manual_measuresSVI$Parameter <- "SVI [mL/g]"
+manual_measuresSVI$Dilution.percent <- ifelse(is.na(manual_measuresSVI$Dilution.percent), 100, manual_measuresSVI$Dilution.percent)
+manual_measuresSVI$n <- 100/manual_measuresSVI$Dilution.percent
+manual_measuresSVI$Equipment <- "Manual"
+manual_measuresSVI$Concentration <- 
+      manual_measuresSVI$SS * manual_measuresSVI$Dilution.percent / 100
+names(manual_measuresSVI)[8] <- "Diluted concentration"
+ref_names <- names(Parameters_dsvisub)
+manual_measuresSVI <- manual_measuresSVI[, ref_names]
+manual_measuresSVI <- manual_measuresSVI[23:29,]
+manual_measuresSVI$Date <- as.character(manual_measuresSVI$Date)
+manual_measuresDSVI$Date <- as.character(manual_measuresDSVI$Date)
+manual_measuresDSVI <- rbind.data.frame(manual_measuresDSVI,manual_measuresSVI)
+
+
+Parameters <- read.csv( "D://Speciale/Data/Time_series/AAV_parameters.csv")
+Parameters<-Parameters[,c("Date","Dilution.percent","n","SS","Velocity","velocity.slope", "Velocity.intercept","SV30.intercept","SV30.slope","SV30","DSVI")]
+Parameters <- Parameters[order(as.Date(Parameters$Date, format="%d.%m.%Y")),]
+Parameters$Date <-as.Date(Parameters$Date, format = "%d.%m.%Y")
+Parameters$Concentration <- 
+      Parameters$SS * Parameters$Dilution.percent / 100
+Parameters$NewVelocity <- Parameters$Velocity/1000*3600
+
+Parameters_svisub <- subset(Parameters, n== 1)
+Parameters_svisub <- Parameters_svisub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "DSVI")]
+Parameters_svisub$Equipment <- "Smart Settler"
+Parameters_svisub$Parameter <- "SVI [mL/g]"
+names(Parameters_svisub)[6] <- "Value"
+names(Parameters_svisub)[5] <- "Diluted concentration"
+Parameters_dsvisub$Date <- as.character(Parameters_dsvisub$Date)
+Parameters_svisub$Date <- as.character(Parameters_svisub$Date)
+Parameters_dsvisub <- rbind.data.frame(Parameters_dsvisub,Parameters_svisub[17:21,])
+
+dsvi <- merge(manual_measuresDSVI, Parameters_dsvisub, by =c("Date", "Parameter"))
+rmse_DSVI <- rmse(dsvi$Value.x, dsvi$Value.y)
+rel_rmse_DSVI <- 100*rmse_DSVI/mean(dsvi$Value.x)
+MAPE_DSVI <- mean(abs((dsvi$Value.x- dsvi$Value.y))/dsvi$Value.x)*100
+#=17.4%
+
+manual_measuresDSV <- manual_measuresSV30
+manual_measuresSV30 <-AAV_metadata[,c("Dato", "D", "SS", "SV")]
+names(manual_measuresSV30)[1] <- "Date"
+names(manual_measuresSV30)[2] <- "Dilution.percent"
+names(manual_measuresSV30)[4] <- "Value"
+manual_measuresSV30$Parameter <- "SV30 [mL/L]"
+manual_measuresSV30$Dilution.percent <- ifelse(is.na(manual_measuresSV30$Dilution.percent), 100, manual_measuresSV30$Dilution.percent)
+manual_measuresSV30$n <- 100/manual_measuresSV30$Dilution.percent
+manual_measuresSV30$Equipment <- "Manual"
+manual_measuresSV30$Concentration <- 
+      manual_measuresSV30$SS * manual_measuresSV30$Dilution.percent / 100
+names(manual_measuresSV30)[8] <- "Diluted concentration"
+ref_names <- names(Parameters_dsvisub)
+manual_measuresSV30 <- manual_measuresSV30[, ref_names]
+manual_measuresSV30 <- rbind.data.frame(manual_measuresDSV,manual_measuresSV30[23:29,])
+manual_measuresSV30$Date <- as.character(manual_measuresSV30$Date)
+
+Parameters_dsv30sub <- Parameters_sv30sub
+Parameters_sv30sub <- subset(Parameters, n== 1)
+Parameters_sv30sub <- Parameters_sv30sub[,c("Date", "Dilution.percent", "n", "SS", "Concentration", "SV30")]
+Parameters_sv30sub$Equipment <- "Smart Settler"
+Parameters_sv30sub$Parameter <- "SV30 [mL/L]"
+names(Parameters_sv30sub)[6] <- "Value"
+names(Parameters_sv30sub)[5] <- "Diluted concentration"
+Parameters_dsv30sub $Date <- as.character(Parameters_dsv30sub$Date)
+Parameters_sv30sub$Date <- as.character(Parameters_sv30sub$Date)
+Parameters_sv30sub <- rbind.data.frame(Parameters_dsv30sub ,Parameters_sv30sub[17:21,])
+Parameters_sv30sub$Date <- as.character(Parameters_sv30sub$Date)
+manual_measuresSV30 <- manual_measuresSV30[,-c(2,3,4)]
+Parameters_sv30sub <- Parameters_sv30sub[,-c(2,3,4,5)]
+
+sv30 <- merge(manual_measuresSV30, Parameters_sv30sub, by =c("Date", "Parameter"))
+rmse_SV30 <- rmse(sv30$Value.x, sv30$Value.y)
+rel_rmse_SV30 <- 100*rmse_SV30/mean(sv30$Value.x)
+MAPE_SV30 <- mean(abs((sv30$Value.x- sv30$Value.y))/sv30$Value.x)*100
+#=20.6%
+
+model <- sv30[,c("Date", "Value.x", "Value.y")]
+names(model)[] <-c("Date", "ManualMethod", "SmartSettler") 
+vs <- ggplot(model)+
+  geom_point(mapping=aes(x=ManualMethod , y=SmartSettler))+labs(x="Standard method DSV [mL/L]", y="Smart Settler DSV [mL/L]")+
+  scale_x_continuous(limits = c(0,1000))+
+  scale_y_continuous(limits = c(0,1000))+
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")+
+  labs(title="Aalborg West")+
+  annotate("text", x=250, y=1000 , label="MAPE: 20.6%" )+
+  theme(axis.title.y = element_blank())+
+  theme(axis.title.x = element_blank())
+
+model$residuals <- model$ManualMethod-model$SmartSettler
+resid <- ggplot(model, aes(x=SmartSettler, y=residuals)) +
+  geom_point() +
+  scale_y_continuous(limits = c(-140,140))+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Smart Settler DSV [mL/L]", y = "Residuals")+
+  theme(axis.title.y = element_blank())
+
+ggarrange(vs,resid, nrow=2, align="v")
+plotName <- paste("D://Speciale/Data/Time_series/AAV_resid.png")
+ggsave(plotName, width = 3, height = 6)
+```
+
+
+```{r}
+Parameters_Vsubsb$Date <- as.character(Parameters_Vsubsb$Date)
+Parameters_dsvisub$Date <- as.character(Parameters_dsvisub$Date)
+
+vus <- merge(Parameters_Vsubsb,Parameters_dsvisub, by="Date")
+vus_plot <- ggplot(vus)+
+  geom_point(mapping=aes(x=Value.x , y=Value.y))+labs(x="Hindered Settling Velocity [m/Lh]", y="DSVI [mL/g]")+
+ #scale_x_continuous(limits = c(100,500))+
+#scale_y_continuous(limits = c(100,500))+
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")+
+  labs(title="Aalborg West")
+vus_plot
+vus_cor <- cor.test(vus$Value.x , vus$Value.y, method="pearson")
+vus_cor2 <- cor.test(vus$Value.x , vus$Value.y, method="spearman")
+
+vus_sub <- vus[, c( "SS.x", "Value.x", "Value.y")]
+names(vus_sub) <- c("SS", "Hindered Settling Velocity", "DSVI")
+vus_cor_matrix <- cor(vus_sub, method = "pearson")
+```
+
+
+
+#Velocity shown in sludge concentration and velocity in m/h
+```{r}
+
+
+
+
+NewVelocity_plot <- ggplot()+ 
+    geom_line(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity)) + 
+  geom_point(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity, color = "Velocity"), shape=15) + 
+  labs( x="Date", y="Hindered settling velocity [m/h]") +
+ scale_y_continuous(name= "Settling velocity [m/h]", breaks = round(seq(min(0), max(8), by = 1),1), 
+                    sec.axis = sec_axis( trans=~., name="Concentration [g/L]", breaks = round(seq(min(0), max(8), by = 1),1)))+
+  scale_x_date(date_breaks="30 days",date_labels = "%d %b")+ 
+  ggtitle("Aalborg West")+
+  geom_errorbar(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity, ymin=NewVelocity-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"], ymax=NewVelocity+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"])) +
+  geom_line(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration), linetype="dotted") + 
+  geom_point(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration, color = "Diluted Concentration"), shape=8)+ guides(color=guide_legend(title="Parameter")) +
+  scale_linetype_manual(values = c("Velocity" = "solid", "Diluted Concentration" = "dashed"))
+
+
+NewVelocity_plot
+plotName <- paste(path_out, "AAV_NewVelocityplot_units.png")
+ggsave(plotName, width = 7.5, height = 5)
+
+```
+
+
+
+#Display SV30
+
+```{r}
+# Filter out rows with dates between 23.02.2023 and 27.03.2023 and n equal to "100"
+Parameters_dsvisub <- rbind(Parameters[1:16,] ,Parameters[!Parameters$n == "1", ])
+Parameters_dsvisub$Equipment <- "Smart Settler"
+
+manual_measures <-AAV_metadata[,c("Dato", "D", "SS", "DSV", "DSVI")]
+names(manual_measures)[1] <- "Date"
+names(manual_measures)[2] <- "Dilution.percent"
+names(manual_measures)[4] <- "SV30"
+names(manual_measures)[5] <- "DSVI"
+manual_measures$Dilution.percent <- ifelse(is.na(manual_measures$Dilution.percent), 100, manual_measures$Dilution.percent)
+manual_measures$n <- 100/manual_measures$Dilution.percent
+manual_measures$Velocity <- NA
+manual_measures$velocity.slope <- NA
+manual_measures$Velocity.intercept <- NA
+manual_measures$SV30.intercept <- NA
+manual_measures$SV30.slope <- NA
+manual_measures$Concentration <- NA
+manual_measures$NewVelocity <-NA
+manual_measures$Equipment <- "Manual"
+ref_names <- names(Parameters_dsvisub)
+manual_measures <- manual_measures[, ref_names]
+
+Parameters_dsvisub$Date <- as.Date(Parameters_dsvisub$Date, format = "%d.%m.%Y")
+Parameters_dsvisub <- rbind(Parameters_dsvisub, manual_measures)
+
+AllinOne_plot <- ggplot()+ 
+   ######SV30
+    geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = SV30, linetype = Equipment)) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = SV30, color = "SV30", shape= Equipment)) + 
+#######layout
+  labs( x="Date", y="Settling velocity [m/h]", color= "Parameter") +
+  scale_y_continuous(name= "Settling velocity [m/h]", breaks = round(seq(min(0), max(400), by = 50),1),
+                   sec.axis = sec_axis( trans=~., name="DSVI [mL/g]", breaks = round(seq(min(0), max(400), by = 50),1)))+
+  scale_x_date(date_breaks="30 days",date_labels = "%d %b")+ 
+  ##########DSVI
+geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = DSVI, linetype = Equipment)) +
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = DSVI, shape= Equipment, color = "DSVI")) +
+  scale_shape_manual(values = c("Smart Settler" = 15, "Manual" = 0))+
+  scale_linetype_manual(values = c("Smart Settler" = "solid", "Manual" = "dashed"))+
+  geom_errorbar(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%Y-%m-%d"), y = DSVI, ymin=DSVI-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"], ymax=DSVI+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"]))
+AllinOne_plot  
+  
+ggarrange(NewVelocity_plot, AllinOne_plot , nrow=2, align="v")
+  
+```
+
+
+```{r}
+SV30_plot  <- ggplot()+ 
+    geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30, color = "Smart settler SV30")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30)) + 
+ #   geom_errorbar(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30, ymin=SV30-1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="SV30"], ymax=SV30+1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="SV30"])) +
+   geom_line(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%Y-%m-%d"), y = DSV, color = "Manuel SV30")) + 
+  geom_point(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%%Y-%m-%d"), y = DSV)) + 
+  #    geom_errorbar(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%d.%m.%Y"), y = SV, ymin=SV-1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="SV30"], ymax=SV+1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="SV30"])) +
+  labs( x="Date", y="Sludge Volume after 30 min [mL/L]") + 
+  scale_y_continuous(breaks = round(seq(min(0), max(1000), by = 50),1))+ 
+  scale_x_date(date_breaks="20 days",date_labels = "%d %b")+ 
+  ggtitle("Aalborg Vest: SV30")
+
+SV30_plot
+plotName <- paste(path_out, "AAV_SV30plot.png")
+ggsave(plotName, width = 7.5, height = 5)
+  
+```
+
+
+
+#Display SVI
+
+```{r}
+Parameters$SVI <- 
+      Parameters$SV30 / Parameters$SS
+
+
+DSVI_plot <- ggplot()+ 
+geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI, color = "Smart settler DSVI")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI)) +
+ # geom_errorbar(data = Parameters,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI, ymin=DSVI-1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="DSVI"], ymax=DSVI+1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="DSVI"])) +
+  
+   geom_line(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%Y-%m-%d"), y = DSVI, color = "DSVI manuel")) +
+  geom_point(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%Y-%m-%d"), y = DSVI)) + 
+ #geom_errorbar(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%d.%m.%Y"), y = DSVI, ymin=DSVI-1.96*stats$se[stats$Udstyr=="Manuel" & stats$Parameter=="DSVI"], ymax=DSVI+1.96*stats$se[stats$Udstyr=="Manuel" & stats$Parameter=="DSVI"])) +
+  labs( x="Date", y="Sludge Volume Index") + 
+  scale_y_continuous(breaks = round(seq(min(0), max(1000), by = 10),1))+ 
+  scale_x_date(date_breaks="20 days",date_labels = "%d %b")+ 
+  ggtitle("Aalborg vest: DSVI")
+
+
+DSVI_plot
+plotName <- paste(path_out, "AAV_SVIplot.png")
+ggsave(plotName, width =7.5, height = 5)
+  
+```
+
+#Investigate Smartsettlers error range
+```{r}
+
+
+
+as.data.frame(AAV_metadata)
+manual_measures <-AAV_metadata[,c("Dato", "DSVI")]
+names(manual_measures)[1] <- "Date"
+names(manual_measures)[2] <- "Manual DSVI"
+manual_measures$Date <- as.Date(manual_measures$Date, format = "%d.%m.%Y")
+Parameters_dsvisub$Date <- as.Date(Parameters_dsvisub$Date, format = "%d.%m.%Y")
+
+common_col_names <- intersect(names(Parameters_dsvisub), names(manual_measures))
+Parameters_dsvisub <- merge(Parameters_dsvisub, manual_measures, by = common_col_names)
+
+#Dilution40_subset$Error <- Dilution40_subset$DSVI - Dilution40_subset$`Manual DSVI`
+#DSVI_meanerror <- mean(Dilution40_subset$Error)
+#Undiluted_subset$Error <- Undiluted_subset$DSVI - Undiluted_subset$`Manual SVI`
+#SVI_meanerror <- mean(Undiluted_subset$Error)
+
+library(Metrics)
+#Parameters$DSVI <- as.numeric(Parameters$SVI)
+#Parameters$`Manual SVI`<- as.numeric(Parameters$`Manual SVI`)
+#Parameters$Error <- (Parameters$SVI-Parameters$`Manual SVI`)/Parameters$`Manual SVI`*100
+#mean_error <- mean(abs(Parameters$Error))
+
+rmse_DSVI <- rmse(Parameters_dsvisub$DSVI,Parameters_dsvisub$`Manual DSVI`)
+
+ggplot()+ 
+  geom_line(data = Parameters,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SVI, color = "SVI Smart settler")) + 
+  geom_point(data = Parameters,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y =SVI)) +
+  
+     geom_line(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%d.%m.%Y"), y = SVI, color = "SVI manuel")) + 
+  geom_point(data = AAV_metadata,  mapping = aes( x = as.Date(Dato, format="%d.%m.%Y"), y = SVI)) + 
+  geom_ribbon(data = Parameters, mapping = aes(ymin = `Manual SVI` -1.96*6.84, ymax = `Manual SVI` +1.96*6.84, x = as.Date(Date)) , fill = "red", alpha = 0.1)+
+  geom_ribbon(data = Parameters, mapping = aes(ymin = SVI -1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="DSVI"], ymax = SVI +1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="DSVI"], x = as.Date(Date)), alpha = 0.1, fill = "blue")+
+ # annotate("text", x=ymd("2022-10-05"), y=65 , label="RMSE: 10.5" ) +
+  labs( x="Date", y="Diluted Sludge Volume Index") + 
+  scale_y_continuous(breaks = round(seq(min(0), max(1000), by = 10),1))+ 
+  scale_x_date(date_breaks="10 days",date_labels = "%d.%m")+ 
+  ggtitle("Aalborg Vest: SVI")
+
+
+```
+
+
+#All in one
+```{r}
+
+
+
+secYaxisScale <- 50
+
+AllinOne_plot <- ggplot()+ 
+  #############velocity
+    geom_line(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity, color = "Velocity")) + 
+  geom_point(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity)) + 
+  geom_errorbar(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity, ymin=NewVelocity-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"], ymax=NewVelocity+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="Settling velocity"])) +
+  
+#######layout
+  labs( x="Date", y="Settling velocity [m/h]") +
+  scale_y_continuous(name= "Settling velocity [m/h]", breaks = round(seq(min(0), max(8), by = 1),1),
+                   sec.axis = sec_axis( trans=~.*secYaxisScale, name="DSVI [mL/g]", breaks = round(seq(min(0), max(400), by = 50),1)))+
+  scale_x_date(date_breaks="20 days",date_labels = "%d %b")+ 
+  
+  ######SV30
+      geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30/secYaxisScale, color = "Smart settler SV30")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30/secYaxisScale)) + 
+    #geom_errorbar(data = Parameters,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30/secYaxisScale, ymin=SV30/secYaxisScale-1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="SV30"]/secYaxisScale, ymax=SV30/secYaxisScale+1.96*stats$se[stats$Udstyr=="Smart Settler" & stats$Parameter=="SV30"]/secYaxisScale)) +
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = `Manual DSV`/secYaxisScale, color = "Manual SV30")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = `Manual DSV`/secYaxisScale)) + 
+  
+  #########Concentration
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration, color = "Concentration"), linetype="dashed") + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration), shape=1) +
+  
+##########DSVI
+geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI/secYaxisScale, color = "Smart settler DSVI")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI/secYaxisScale)) +
+  geom_errorbar(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI/secYaxisScale, ymin=DSVI/secYaxisScale-1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"]/secYaxisScale, ymax=DSVI/secYaxisScale+1.96*stats$Standard.error[stats$Equipment=="Smart Settler" & stats$Parameter=="DSVI"]/secYaxisScale))+
+
+geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = `Manual DSVI`/secYaxisScale, color = "Manual DSVI")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = `Manual DSVI`/secYaxisScale)) +
+  geom_errorbar(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = `Manual DSVI`/secYaxisScale, ymin=`Manual DSVI`/secYaxisScale-1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="DSVI"]/secYaxisScale, ymax=`Manual DSVI`/secYaxisScale+1.96*stats$Standard.error[stats$Equipment=="Manuel" & stats$Parameter=="DSVI"]/secYaxisScale))+
+  theme(axis.line = element_line(),
+        plot.margin = margin(10, 10, 10, 30))
+  
+  
+AllinOne_plot
+
+
+Conc_plot <- ggplot()+  labs( x="Date", y="Concentration [g/L]")+
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration, color = "Concentration"), linetype="dashed") + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = Concentration), shape=1)+ 
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI/secYaxisScale, color = "Smart settler DSVI")) +
+  geom_line(data = Parameters_Vsub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = NewVelocity, color = "Velocity")) + 
+  scale_y_continuous(name= "Concentration [g/L]", breaks = round(seq(min(0), max(8), by = 1),1),
+                   sec.axis = sec_axis( trans=~.*secYaxisScale, name="DSVI [mL/g]", breaks = round(seq(min(0), max(400), by = 50),1)))+
+  theme(axis.line = element_line(),
+        plot.margin = margin(10, 10, 10, 30))
+Conc_plot 
+
+SV30_plot <- ggplot()+
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30, color = "Smart settler SV30")) + 
+  geom_point(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = SV30)) + 
+  scale_y_continuous( name="SV30 [mL/L]", breaks = seq(min(0), max(400), by = 50),1)+  
+  geom_line(data = Parameters_dsvisub,  mapping = aes( x = as.Date(Date, format="%d.%m.%Y"), y = DSVI, color = "Smart settler DSVI")) +
+  theme(axis.line = element_line(),
+        plot.margin = margin(10, 10, 10, 30))
+SV30_plot
+
+library(cowplot)
+library(patchwork)
+wrap_elements(get_plot_component(Conc_plot , "ylab-l"))+
+  wrap_elements(get_y_axis(Conc_plot)) + wrap_elements(get_plot_component(SV30_plot , "ylab-l"))+
+  wrap_elements(get_y_axis(SV30_plot)) + AllinOne_plot + plot_layout(widths = c(3, 1, 3, 1, 40))
+
+
+plotName <- paste(path_out, "AAV_AllinOneplot.png")
+ggsave(plotName, width = 10, height = 5)
+  
+```
+
+
+
+#Write out files
+```{r}
+parameterName <- paste(path_out, "AAV_analysisparameters.csv", sep = "")
+write.csv(Parameters, parameterName)
+
+
+```
+
+
+
